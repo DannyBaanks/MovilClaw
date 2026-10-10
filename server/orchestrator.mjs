@@ -26,6 +26,9 @@ import { cloneOnHost, pushBranchAndOpenPr } from "./github.mjs";
 
 export class OrchestratorError extends Error {}
 
+/** The same 64 MiB ceiling the sealed store uses: a workspace, not a disk image. */
+const MAX_INJECT_BYTES = 64 * 1024 * 1024;
+
 /** Refuse a bad id before it reaches Docker: the id becomes part of a volume name. */
 function assertSafeId(id) {
   if (typeof id !== "string" || !/^mc-[a-z0-9]{4,32}$/.test(id)) {
@@ -231,6 +234,46 @@ export function createOrchestrator({
         throw new OrchestratorError("no hay nada que recoger en esa carpeta");
       }
       return Buffer.from(b64.out.trim(), "base64");
+    },
+
+    /**
+     * Re-injection: put a previously collected work archive INTO a fresh sandbox.
+     *
+     * This closes the loop the download alone left open: `collectWork` hands the person
+     * an archive, and this mounts its contents back as /work/app so the work continues
+     * where it stopped. The bytes arrive from the caller (the browser, which opened the
+     * seal itself — the server never decrypts anything) and travel in as a base64 pipe,
+     * the same channel as `sendFolder`: no bind mount, no path into the host machine.
+     */
+    async injectWork(id, archive) {
+      await sweep();
+      const sandbox = requireSandbox(id);
+      if (sandbox.state.phase === PHASES.DESTROYED) {
+        throw new OrchestratorError("sandbox is already destroyed; create a new one and inject into it");
+      }
+      if (!Buffer.isBuffer(archive) || !archive.length) {
+        throw new OrchestratorError("el archivo esta vacio");
+      }
+      if (archive.length > MAX_INJECT_BYTES) {
+        throw new OrchestratorError(`el archivo supera el limite de ${MAX_INJECT_BYTES / 1024 / 1024} MiB`);
+      }
+      if (sandbox.state.phase === PHASES.SUSPENDED) await docker.resume(sandbox.name);
+      const b64 = archive.toString("base64");
+      const result = await docker.runCommand(sandbox.name, [
+        "sh", "-c",
+        `rm -rf /work/app && mkdir -p /work/app && printf '%s' '${b64}' | base64 -d | tar -xzf - -C /work/app`,
+      ], { timeoutMs: 300_000 });
+      if (result.code !== 0) {
+        throw new OrchestratorError(`no se pudo reinyectar el trabajo: ${result.err.slice(0, 200)}`);
+      }
+      const next = touch(sandbox.state, now());
+      sandboxes.set(id, { ...sandbox, state: next });
+      const listing = await docker.runCommand(sandbox.name, ["ls", "-1", "/work/app"]);
+      return {
+        into: "/work/app",
+        bytes: archive.length,
+        files: listing.out.split("\n").filter(Boolean).slice(0, 40),
+      };
     },
 
     /**

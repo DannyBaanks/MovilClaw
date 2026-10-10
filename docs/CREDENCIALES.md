@@ -83,9 +83,10 @@ No es que esté desaconsejado: la operación no está escrita, así que la ruta 
 
 ## Lo que queda pendiente
 
-- **Device flow de GitHub**: implementado, pero necesita que registres una OAuth App
-  (`client_id`). Sin él se usa el token pegado, que funciona hoy. No se inventa un `client_id`
-  ni se usa el de otra app.
+- **Device flow de GitHub**: funciona con tu OAuth App registrada
+  (`MOVILCLAW_GITHUB_CLIENT_ID=<id>`). El `device_code` nunca sale del servidor; el flujo
+  se empareja por el código corto. Sin registrar la app se usa el token pegado, que
+  funciona hoy. No se inventa un `client_id` ni se usa el de otra app.
 - **Login del proveedor de modelos**: se apoya en el que tu app ya tiene
   (`openclaw models auth login --provider zai-global`, `zai-coding-global`, `zai-cn`, …). La
   capa de UI para elegirlo desde MovilClaw está por hacer.

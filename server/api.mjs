@@ -87,7 +87,7 @@ function readBody(req) {
   });
 }
 
-/** Read a body up to a limit, as text. Used for the sealed blob, which stays opaque. */
+/** Read a body up to a limit, as raw bytes. Used for sealed blobs and work archives. */
 function readRawBody(req, limit) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -95,18 +95,18 @@ function readRawBody(req, limit) {
     req.on("data", (chunk) => {
       size += chunk.length;
       if (size > limit) {
-        reject(new OrchestratorError(`the sealed payload exceeds ${Math.floor(limit / 1024 / 1024)} MiB`));
+        reject(new OrchestratorError(`the payload exceeds ${Math.floor(limit / 1024 / 1024)} MiB`));
         req.destroy();
         return;
       }
       chunks.push(chunk);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
 }
 
-/** Device flows in progress, keyed by device_code. In memory: an unfinished login is not state. */
+/** Device flows in progress, keyed by the short user_code. In memory: an unfinished login is not state. */
 const pendingCodes = new Map();
 
 export function createApi(
@@ -160,7 +160,10 @@ export function createApi(
         if (parts[3] === "start" && req.method === "POST") {
           const pending = await requestDeviceCode();
           // The device_code stays here; only the short code the person types goes back.
-          pendingCodes.set(pending.deviceCode, pending);
+          // The flow is keyed by that short code, because it is the only handle the
+          // browser has: asking it to echo the device_code back could never work,
+          // and that is exactly what broke the first real login.
+          pendingCodes.set(pending.userCode, { ...pending, startedAt: Date.now() });
           return send(res, 201, {
             ...instructions(pending),
             note: "El codigo caduca. Cuando lo autorices, MovilClaw recibe el token y lo guarda en el servidor.",
@@ -168,16 +171,25 @@ export function createApi(
         }
         if (parts[3] === "wait" && req.method === "POST") {
           const body = await readBody(req);
-          const pending = pendingCodes.get(String(body.deviceCode ?? ""));
+          const userCode = String(body.userCode ?? "").trim();
+          const pending = pendingCodes.get(userCode);
           if (!pending) return send(res, 409, { error: "no hay ningun inicio de sesion en curso con ese codigo" });
-          const result = await waitForToken({ deviceCode: pending.deviceCode, intervalMs: pending.intervalMs });
-          pendingCodes.delete(pending.deviceCode);
-          // Stored exactly like a pasted token: in memory, or sealed if a passphrase came.
-          const stored = await credentials.put(body.id ?? "github", result.token, {
-            scopes: result.scopes,
-            passphrase: body.passphrase ?? null,
-          });
-          return send(res, 201, { ...stored, via: "github-device-flow" });
+          if (Date.now() - pending.startedAt > pending.expiresInMs) {
+            pendingCodes.delete(userCode);
+            return send(res, 409, { error: "ese codigo ya caduco; pide uno nuevo" });
+          }
+          try {
+            const result = await waitForToken({ deviceCode: pending.deviceCode, intervalMs: pending.intervalMs });
+            // Stored exactly like a pasted token: in memory, or sealed if a passphrase came.
+            const stored = await credentials.put(body.id ?? "github", result.token, {
+              scopes: result.scopes,
+              passphrase: body.passphrase ?? null,
+            });
+            return send(res, 201, { ...stored, via: "github-device-flow" });
+          } finally {
+            // Whether it ended in a token, a denial or an expiry, the flow is over.
+            pendingCodes.delete(userCode);
+          }
         }
         return send(res, 404, { error: "ruta de autenticacion desconocida" });
       }
@@ -247,6 +259,15 @@ export function createApi(
           });
           return res.end(archive);
         }
+        /**
+         * Re-injection: the archive comes back in, raw bytes, and lands as /work/app.
+         * If the person's file was sealed, the browser already opened it — this server
+         * receives the same archive a plain download produced and never sees a key.
+         */
+        if (op === "inject" && req.method === "POST") {
+          const archive = await readRawBody(req, 64 * 1024 * 1024);
+          return send(res, 201, await orch.injectWork(id, archive));
+        }
         /** Accounts and credentials. The token travels in the body and is never echoed. */
         if (op === "account" && req.method === "POST") {
           const body = await readBody(req);
@@ -310,8 +331,8 @@ export function createApi(
          * stores it and can never open it. That is the whole point of these routes.
          */
         if (op === "seal" && req.method === "POST") {
-          const text = await readRawBody(req, 64 * 1024 * 1024);
-          const manifest = await sealedStore.put(id, text);
+          const buf = await readRawBody(req, 64 * 1024 * 1024);
+          const manifest = await sealedStore.put(id, buf.toString("utf8"));
           return send(res, 201, { stored: true, ...manifest });
         }
         if (op === "seal" && req.method === "GET") {

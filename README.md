@@ -16,6 +16,9 @@ Teléfono / navegador  ──►  PWA  ──►  Orquestador  ──►  sandbo
 - **Crear** un sandbox con la cuenta atrás que elijas: 30 min, 2 h o 12 h.
 - **Usarlo** reinicia la cuenta. Un sandbox no muere mientras trabajas.
 - **Descargar** el archivo del sandbox y guardarlo en el teléfono.
+- **Continuar un trabajo**: el archivo descargado —sellado o `tar.gz`— se **reinyecta** en un
+  sandbox nuevo. Si está sellado, lo abre tu navegador con tu frase; la frase nunca sale de él
+  y el servidor solo ve el archivo ya abierto.
 - **Destruir**: se niega si aún no descargaste el archivo.
 - **Traer un repositorio** público: el sandbox abre la red **solo para eso** y la cierra al
   terminar. Si el clonado falla, también la cierra.
@@ -109,7 +112,7 @@ La regla que manda: **nunca se destruye trabajo que no se haya entregado antes.*
 | `server/lifecycle.mjs` | La máquina de estados: activo → suspendido → destruido |
 | `server/docker.mjs` | **Todo** el aislamiento, en un solo sitio auditable |
 | `server/orchestrator.mjs` | Une el ciclo de vida, Docker y el reloj |
-| `server/api.mjs` | Cinco operaciones HTTP, sin dependencias |
+| `server/api.mjs` | La API HTTP y la PWA en un solo puerto, sin dependencias |
 | `web/index.html` | La PWA (la sirve `server/api.mjs`, sin proxy) |
 | `web/seal.mjs` | El cifrado: PBKDF2 + AES-GCM. **La clave nunca sale del navegador** |
 | `server/network.mjs` | La red por fases: qué destinos se abren y por qué |
@@ -166,11 +169,11 @@ sandbox no tiene ninguna, y las operaciones que **no existen** en el código.
 
 ## Qué NO hay todavía
 
-- **Device flow de GitHub**: implementado, pero necesita que registres una OAuth App
-  (`client_id`). Hoy se usa el token pegado, que funciona. No se inventa un `client_id`.
+- **Device flow de GitHub**: funciona con tu OAuth App registrada
+  (`MOVILCLAW_GITHUB_CLIENT_ID=<id>`). El emparejamiento del flujo es por el código corto:
+  el `device_code` nunca sale del servidor. El token pegado sigue siendo la alternativa.
 - **UI del login de proveedor**: se apoya en el que tu app ya tiene (`models auth login`),
   pero elegirlo desde MovilClaw está por hacer.
-- **No hay reinyección**: el archivo se descarga, pero un sandbox nuevo aún no lo monta.
 - **No hay app iOS.** El cliente es web. Ver [docs/ENTORNO.md](docs/ENTORNO.md): el runner
   de macOS puede compilar Swift, y `ISyCodeMovil` es la plantilla, pero eso es otra entrega.
 - **Sin TLS ni autenticación en la API.** Escucha en loopback; exponerlo a una red es una

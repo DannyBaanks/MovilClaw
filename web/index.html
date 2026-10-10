@@ -77,6 +77,22 @@
     <div id="sealOut"></div>
   </div>
 
+  <h2>Reanudar un trabajo</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">
+      Elige el archivo que descargaste: el sello <code>.sealed.json</code> o el
+      <code>.tar.gz</code> del trabajo. Si está sellado se abre aquí mismo con la frase
+      de arriba — <b>la frase nunca sale de este navegador</b> — y el servidor solo
+      recibe el archivo ya abierto para montarlo en el sandbox elegido.
+    </p>
+    <div class="row">
+      <input id="injectFile" type="file" accept=".json,.gz,application/gzip"
+             style="flex:1;min-width:200px;color:var(--ink)">
+      <button class="primary" id="injectBtn">Reinyectar</button>
+    </div>
+    <div id="injectOut"></div>
+  </div>
+
   <h2>Tu repositorio</h2>
   <div class="card">
     <p class="muted" style="margin-top:0">
@@ -263,7 +279,7 @@ $("#create").addEventListener("click", async () => {
 });
 // ------------------------------------------------------------------ sealing
 // The passphrase stays in this page. What we send is already ciphertext.
-import { inspect, seal } from "./seal.mjs";
+import { inspect, open as openSealed, seal } from "./seal.mjs";
 let grantMinutes = 30;
 
 function phrase() {
@@ -286,9 +302,14 @@ document.querySelector("#sealNow").addEventListener("click", async (ev) => {
   if (!id) return;
   ev.target.disabled = true;
   try {
-    // What we seal is this sandbox's description of itself plus the repo it points at.
-    const state = await call("/api/sandboxes/" + id);
-    const bytes = new TextEncoder().encode(JSON.stringify({ state }, null, 2));
+    // Lo que sellamos es el trabajo real del sandbox: el mismo archivo que se descarga.
+    // Por eso el sello se puede volver a abrir y reinyectar en un sandbox nuevo.
+    const resWork = await fetch(API + "/api/sandboxes/" + id + "/work");
+    if (!resWork.ok) {
+      const e = await resWork.json().catch(() => ({}));
+      throw new Error(e.error || "no hay trabajo que sellar en este sandbox");
+    }
+    const bytes = new Uint8Array(await resWork.arrayBuffer());
     const blob = await seal(bytes, pass);
     const res = await fetch(API + "/api/sandboxes/" + id + "/seal", { method: "POST", body: blob });
     const manifest = await res.json();
@@ -322,6 +343,34 @@ document.querySelector("#makeGrant").addEventListener("click", async () => {
       '<pre>' + esc(JSON.stringify({ permiso: g.note, caduca: "en " + minutos + " min", token: g.token.slice(0, 40) + "…" }, null, 2)) + '</pre>';
     toast("Permiso firmado por " + minutos + " min");
   } catch (e) { toast(e.message); }
+});
+
+// ------------------------------------------------------------------ reinyeccion
+// El archivo vuelve a un sandbox. Si viene sellado, esta pagina lo abre con la
+// frase de arriba: la clave nunca sale del navegador; el servidor solo ve bytes.
+document.querySelector("#injectBtn").addEventListener("click", async (ev) => {
+  const id = await activeId();
+  if (!id) return;
+  const file = document.querySelector("#injectFile").files[0];
+  if (!file) { toast("Elige primero el archivo descargado"); return; }
+  ev.target.disabled = true;
+  try {
+    let bytes = new Uint8Array(await file.arrayBuffer());
+    // Un sello es JSON (empieza con '{'); un tar.gz no. Se detecta sin abrir nada.
+    const head = new TextDecoder().decode(bytes.subarray(0, Math.min(bytes.length, 64)));
+    if (head.trimStart().startsWith("{")) {
+      const pass = document.querySelector("#phrase").value;
+      if (pass.length < 8) { toast("Escribe la frase secreta de arriba para abrir el sello"); return; }
+      bytes = await openSealed(new TextDecoder().decode(bytes), pass);
+    }
+    const res = await fetch(API + "/api/sandboxes/" + id + "/inject", { method: "POST", body: bytes });
+    const out = await res.json();
+    if (!res.ok) throw new Error(out.error || "no se pudo reinyectar");
+    document.querySelector("#injectOut").innerHTML =
+      '<pre>' + esc(JSON.stringify({ en: out.into, bytes: out.bytes, archivos: out.files }, null, 2)) + '</pre>';
+    toast("Trabajo reinyectado en " + id);
+  } catch (e) { toast(e.message); }
+  finally { ev.target.disabled = false; }
 });
 
 // ------------------------------------------------------------------ repo y consola
@@ -371,7 +420,8 @@ document.querySelector("#ghLogin").addEventListener("click", async (ev) => {
     state.textContent = "esperando…";
     const done = await call("/api/auth/github/wait", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ deviceCode: pending.deviceCode, id: "github" }),
+      // El device_code nunca vino a esta pagina: el flujo se empareja por el codigo corto.
+      body: JSON.stringify({ userCode: pending.userCode, id: "github" }),
     });
     box.style.display = "none";
     state.textContent = "conectado";
