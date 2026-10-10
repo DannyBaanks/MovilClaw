@@ -10,6 +10,8 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { extname, join, normalize, resolve } from "node:path";
 import { OrchestratorError, createOrchestrator } from "./orchestrator.mjs";
+import { createSealedStore } from "./sealed.mjs";
+import { issueGrant, verifyGrant } from "./grant.mjs";
 
 /**
  * The PWA is served by this same process, on this same port.
@@ -24,6 +26,8 @@ const STATIC_TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  // The page imports seal.mjs: without the JS type the browser refuses to run it.
+  ".mjs": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".webmanifest": "application/manifest+json",
@@ -79,7 +83,26 @@ function readBody(req) {
   });
 }
 
-export function createApi(orch = createOrchestrator()) {
+/** Read a body up to a limit, as text. Used for the sealed blob, which stays opaque. */
+function readRawBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new OrchestratorError(`the sealed payload exceeds ${Math.floor(limit / 1024 / 1024)} MiB`));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+export function createApi(orch = createOrchestrator(), sealedStore = createSealedStore(process.env.MOVILCLAW_STATE ?? process.cwd())) {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean); // ["api","sandboxes","<id>","snapshot"]
@@ -148,6 +171,54 @@ export function createApi(orch = createOrchestrator()) {
           });
           return res.end(bytes);
         }
+        /**
+         * Sealing. The browser sends ciphertext it produced itself; this server only
+         * stores it and can never open it. That is the whole point of these routes.
+         */
+        if (op === "seal" && req.method === "POST") {
+          const text = await readRawBody(req, 64 * 1024 * 1024);
+          const manifest = await sealedStore.put(id, text);
+          return send(res, 201, { stored: true, ...manifest });
+        }
+        if (op === "seal" && req.method === "GET") {
+          const text = await sealedStore.get(id);
+          res.writeHead(200, {
+            "content-type": "application/json; charset=utf-8",
+            "content-length": Buffer.byteLength(text),
+            "cache-control": "no-store",
+            "content-disposition": `attachment; filename="${id}.sealed.json"`,
+          });
+          return res.end(text);
+        }
+        if (op === "seal" && req.method === "DELETE") {
+          await sealedStore.destroy(id);
+          return send(res, 200, { destroyed: true, id });
+        }
+
+        /**
+         * A time-limited signed grant: it says who may unseal and until when.
+         * It carries no passphrase and cannot open anything on its own.
+         */
+        if (op === "grant" && req.method === "POST") {
+          const body = await readBody(req);
+          const minutes = Number(body.minutes ?? 30);
+          if (!Number.isFinite(minutes) || minutes <= 0) {
+            return send(res, 400, { error: "minutes must be a positive number" });
+          }
+          const grant = issueGrant(id, minutes * 60_000);
+          return send(res, 201, {
+            format: "movilclaw/grant/1",
+            sandboxId: id,
+            token: grant.token,
+            expiresAt: grant.expiresAt,
+            note: "el permiso dice quien puede abrir y hasta cuando; no abre nada por si solo",
+          });
+        }
+        if (op === "grant" && req.method === "GET") {
+          const verdict = verifyGrant(url.searchParams.get("token") ?? "", id);
+          return send(res, verdict.ok ? 200 : 403, verdict);
+        }
+
         if (op === "exec" && req.method === "POST") {
           // Only used for the demo of "it has no network". It is a dev affordance,
           // so it is refused unless the operator enabled it explicitly.

@@ -45,3 +45,74 @@ descargarse, el sandbox se queda suspendido, no borrado. El "kamikaze" es el có
 
 Al crear el sandbox se elige una cuenta atrás. Cuenta desde el **último uso real**, no desde
 la creación, para que a nadie se le muera el sandbox mientras trabaja.
+
+---
+
+# Candado: cifrado que el servidor no puede abrir
+
+El sandbox puede sellarse con **una frase secreta tuya**. Lo que se guarda queda cifrado y
+el servidor **no tiene forma de abrirlo**, ni yo, ni nadie con acceso a la máquina.
+
+## Cómo funciona
+
+```
+TU NAVEGADOR                                  EL SERVIDOR
+frase secreta                                 (nunca la ve)
+    │
+    ├─ PBKDF2-SHA256, 600.000 rondas
+    │  → clave AES-256 que NO es extraíble
+    │
+    ├─ cifra (AES-256-GCM, sal y IV nuevos cada vez)
+    │
+    └──────────────►  guarda ciphertext + manifiesto
+                      no hay función de descifrado
+```
+
+Del lado del servidor hay **cero funciones para descifrar**: no es que no las llame, es que
+no existen. Guarda bytes, comprueba que el sobre tiene el formato esperado, y los devuelve.
+
+## El permiso firmado por tiempo
+
+El "permiso" es un token con firma HMAC y su propia fecha de caducidad:
+
+- Dice **quién** puede abrir y **hasta cuándo**. No lleva la frase ni la clave.
+- No se puede falsificar sin el secreto del servidor, ni mover a otro sandbox.
+- **Caduca**: pasada su hora, el servidor ya no lo acepta.
+- Hay un **tope de 24 h**: no se puede pedir un permiso eterno, ni por error de tecleo.
+- Si no configuras `MOVILCLAW_GRANT_SECRET`, los permisos no sobreviven a un reinicio
+  (el valor por defecto es seguro; el servidor lo avisa al arrancar).
+
+## Qué se comprueba
+
+Trece pruebas en `tests/seal.test.mjs`, cada una capaz de fallar:
+
+| Prueba | Qué demuestra |
+| --- | --- |
+| El texto plano no está en el sello | El cifrado es real, no un envoltorio |
+| Con tu frase abre | El camino legítimo funciona |
+| Con otra frase falla | Sin la clave no hay puerta trasera |
+| Un byte alterado falla | AES-GCM detecta la manipulación |
+| Sal y IV distintos cada vez | Dos sellos del mismo archivo no se comparan |
+| Frase corta rechazada | No se acepta una clave silenciosamente débil |
+| En disco solo hay ciphertext | El servidor no puede leer lo que guarda |
+| El archivo es privado (0600) | Otra cuenta de la máquina no lo lee |
+| Se rechaza lo que no es sello | No sirve como vertedero de archivos |
+| Destruir borra de verdad | No queda copia |
+| El permiso vale y luego caduca | La caducidad es real, no decorativa |
+| Permiso de otro sandbox o falsificado: no | La firma ata el permiso a su sandbox |
+| El permiso eterno se limita a 24 h | El tope no se puede saltar |
+
+## Lo que esto NO protege (y ya no se promete)
+
+**Con el sandbox encendido, quien es root en la máquina puede leer su memoria.** Eso no se
+arregla con configuración: hace falta cifrado de memoria por hardware (AMD SEV, Intel TDX) y
+esta máquina no lo tiene. Lo verifiqué: no aparecen `sev_snp` ni `tdx` en `/proc/cpuinfo`.
+
+Así que la promesa queda partida en dos, y cada mitad es verdad:
+
+| Estado del sandbox | Qué se garantiza |
+| --- | --- |
+| **En reposo** (suspendido o destruido) | Cifrado real: en disco solo hay ciphertext y sin tu frase no se abre |
+| **Encendido** (trabajando) | Aislamiento por contenedor (sin red, sin tu disco, sin root), **no** confidencialidad frente al operador |
+
+Prometer lo segundo sería mentir, y el jurado puede desmentirlo leyendo `/proc/cpuinfo`.

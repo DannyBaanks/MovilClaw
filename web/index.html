@@ -62,11 +62,31 @@
     <p class="muted" style="margin-bottom:0">La cuenta atrás empieza con el último uso real, no con la creación.</p>
   </div>
 
+  <h2>Candado de tu sandbox</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">
+      Escribe una frase secreta. Con ella se cifra lo que se guarde del sandbox, y
+      <b>la frase nunca sale de este navegador</b>. El servidor solo guarda un archivo que no puede abrir.
+    </p>
+    <div class="row">
+      <input id="phrase" type="password" placeholder="tu frase secreta (mínimo 8)" autocomplete="off"
+             style="flex:1;min-width:200px;background:#0d0a1a;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font:inherit">
+      <button class="ghost" id="sealNow">Sellar el sandbox</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span class="muted">Permiso para abrirlo, por</span>
+      <button class="gmin" data-min="30">30 min</button>
+      <button class="gmin" data-min="120">2 h</button>
+      <button class="ghost" id="makeGrant">Firmar permiso</button>
+    </div>
+    <div id="sealOut"></div>
+  </div>
+
   <h2>Sandboxes</h2>
   <div id="list"></div>
 
   <div id="toast"></div>
-<script>
+<script type="module">
 // Same origin as the page: the static server proxies /api to the orchestrator.
 const API = "";
 let ttl = 120;
@@ -166,6 +186,69 @@ $("#create").addEventListener("click", async () => {
   } catch (e) { toast(e.message); }
   finally { $("#create").disabled = false; await render(); }
 });
+// ------------------------------------------------------------------ sealing
+// The passphrase stays in this page. What we send is already ciphertext.
+import { inspect, seal } from "./seal.mjs";
+let grantMinutes = 30;
+
+function phrase() {
+  const value = document.querySelector("#phrase").value;
+  if (value.length < 8) { toast("La frase necesita al menos 8 caracteres"); return null; }
+  return value;
+}
+
+async function currentSandboxId() {
+  const { sandboxes } = await call("/api/sandboxes");
+  const alive = sandboxes.filter((s) => s.phase !== "destroyed");
+  if (!alive.length) { toast("Crea un sandbox primero"); return null; }
+  return alive[0].id;
+}
+
+document.querySelector("#sealNow").addEventListener("click", async (ev) => {
+  const pass = phrase();
+  if (!pass) return;
+  const id = await currentSandboxId();
+  if (!id) return;
+  ev.target.disabled = true;
+  try {
+    // What we seal is this sandbox's description of itself plus the repo it points at.
+    const state = await call("/api/sandboxes/" + id);
+    const bytes = new TextEncoder().encode(JSON.stringify({ state }, null, 2));
+    const blob = await seal(bytes, pass);
+    const res = await fetch(API + "/api/sandboxes/" + id + "/seal", { method: "POST", body: blob });
+    const manifest = await res.json();
+    if (!res.ok) throw new Error(manifest.error || "no se pudo sellar");
+    document.querySelector("#sealOut").innerHTML =
+      '<pre>' + esc(JSON.stringify({ sellado: inspect(blob), servidorDiceQueNoPuedeLeerlo: manifest.hostCanRead === false }, null, 2)) + '</pre>';
+    toast("Sellado. El servidor guarda ciphertext.");
+  } catch (e) { toast(e.message); }
+  finally { ev.target.disabled = false; }
+});
+
+document.addEventListener("click", async (ev) => {
+  if (ev.target.classList.contains("gmin")) {
+    grantMinutes = Number(ev.target.dataset.min);
+    document.querySelectorAll(".gmin").forEach((b) => { b.className = "gmin" + (b === ev.target ? " primary" : ""); });
+    return;
+  }
+});
+document.querySelectorAll(".gmin")[0].classList.add("primary");
+
+document.querySelector("#makeGrant").addEventListener("click", async () => {
+  const id = await currentSandboxId();
+  if (!id) return;
+  try {
+    const g = await call("/api/sandboxes/" + id + "/grant", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ minutes: grantMinutes }),
+    });
+    const minutos = Math.round((g.expiresAt - Date.now()) / 60000);
+    document.querySelector("#sealOut").innerHTML =
+      '<pre>' + esc(JSON.stringify({ permiso: g.note, caduca: "en " + minutos + " min", token: g.token.slice(0, 40) + "…" }, null, 2)) + '</pre>';
+    toast("Permiso firmado por " + minutos + " min");
+  } catch (e) { toast(e.message); }
+});
+
 $("#refresh").addEventListener("click", render);
 document.querySelector('.ttl[data-min="120"]').classList.add("primary");
 

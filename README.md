@@ -17,6 +17,10 @@ Teléfono / navegador  ──►  PWA  ──►  Orquestador  ──►  sandbo
 - **Usarlo** reinicia la cuenta. Un sandbox no muere mientras trabajas.
 - **Descargar** el archivo del sandbox y guardarlo en el teléfono.
 - **Destruir**: se niega si aún no descargaste el archivo.
+- **Sellar** el sandbox con una frase secreta tuya: lo guardado queda cifrado y **el
+  servidor no puede abrirlo** (no existe función de descifrado en su lado).
+- **Firmar un permiso por tiempo**: dice quién puede abrirlo y hasta cuándo, caduca solo,
+  y no se puede pedir uno eterno (tope de 24 h).
 
 ## Arrancarlo
 
@@ -43,6 +47,8 @@ Pruebas de aislamiento **con Docker real**, no simuladas (`npm run test:isolatio
 | Ejecutar como root | `id -u` → `1000` |
 | Reservar 1 GiB con tope de 256m | rechazado por el kernel |
 | Destruir y dejar restos | contenedor y volumen eliminados |
+| El servidor lee lo que guardó | solo hay ciphertext; sin la frase no se abre |
+| Permiso caducado | rechazado; y uno "eterno" se limita a 24 h |
 
 Y el ciclo de vida completo, con Docker de verdad:
 
@@ -63,11 +69,18 @@ crear → activo → (inactividad) → SUSPENDIDO → [descargar archivo] → DE
 3. **Un test que pasa por el motivo equivocado no prueba nada.** El de "pasa al enlazar" se
    ponía en rojo por los permisos del archivo, no por la cadena rota.
 
-## Aislamiento: la promesa honesta
+## Aislamiento y candado: la promesa honesta
 
-Lo que **sí** se garantiza está en [docs/AISLAMIENTO.md](docs/AISLAMIENTO.md), con su
-"cómo se comprueba" y tres cosas que **no** se garantizan: invisibilidad frente al operador
-del servidor, resistencia a un exploit del kernel, y lo que el propio usuario pegue dentro.
+Todo está en [docs/AISLAMIENTO.md](docs/AISLAMIENTO.md) con su "cómo se comprueba". Lo
+importante, partido en dos porque cada mitad es distinta:
+
+| Estado del sandbox | Qué se garantiza |
+| --- | --- |
+| **En reposo** | Cifrado real: en disco solo hay ciphertext y sin tu frase no se abre |
+| **Encendido** | Aislamiento por contenedor (sin red, sin tu disco, sin root). **No** confidencialidad frente al operador: eso necesita hardware (SEV/TDX) que esta máquina no tiene |
+
+No prometo invisibilidad con el sandbox encendido porque sería falso y se puede desmentir
+leyendo `/proc/cpuinfo`. Lo que sí prometo es verificable, y las 27 pruebas lo verifican.
 
 La regla que manda: **nunca se destruye trabajo que no se haya entregado antes.**
 
@@ -80,7 +93,10 @@ La regla que manda: **nunca se destruye trabajo que no se haya entregado antes.*
 | `server/orchestrator.mjs` | Une el ciclo de vida, Docker y el reloj |
 | `server/api.mjs` | Cinco operaciones HTTP, sin dependencias |
 | `web/index.html` | La PWA (la sirve `server/api.mjs`, sin proxy) |
-| `tests/` | Ciclo de vida con reloj falso + aislamiento con Docker real |
+| `web/seal.mjs` | El cifrado: PBKDF2 + AES-GCM. **La clave nunca sale del navegador** |
+| `server/grant.mjs` | El permiso firmado con vencimiento (HMAC + caducidad) |
+| `server/sealed.mjs` | Guarda ciphertext. No tiene, a propósito, ninguna función para descifrarlo |
+| `tests/` | Ciclo de vida, cifrado y aislamiento con Docker real |
 
 Sin dependencias de npm: solo Node 20+ y Docker.
 
