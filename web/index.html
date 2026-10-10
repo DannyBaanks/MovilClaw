@@ -46,11 +46,6 @@
   <h2>Crear sandbox</h2>
   <div class="card">
     <div class="row">
-      <label class="muted" for="repo">Repo</label>
-      <input id="repo" placeholder="usuario/repositorio" autocomplete="off"
-             style="flex:1;min-width:180px;background:#0d0a1a;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font:inherit">
-    </div>
-    <div class="row" style="margin-top:10px">
       <span class="muted">Caduca tras</span>
       <button class="ttl" data-min="30">30 min</button>
       <button class="ttl" data-min="120">2 h</button>
@@ -85,14 +80,66 @@
   <h2>Tu repositorio</h2>
   <div class="card">
     <p class="muted" style="margin-top:0">
-      Pega la URL de un repo público. El sandbox abre la red solo para traerlo y la cierra al terminar.
+      Pega la URL del repo. Sin cuenta, solo funciona con repos <b>públicos</b>; con tu cuenta,
+      también con los <b>privados</b>. El sandbox abre la red solo para traerlo y la cierra al terminar.
     </p>
     <div class="row">
       <input id="repoUrl" placeholder="https://github.com/usuario/repositorio" autocomplete="off"
              style="flex:1;min-width:200px;background:#0d0a1a;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font:inherit">
       <button class="primary" id="cloneBtn">Traer repo</button>
     </div>
+    <div class="row" style="margin-top:8px">
+      <label class="muted"><input type="checkbox" id="useAccount"> usar mi cuenta (privados)</label>
+    </div>
     <div id="repoOut"></div>
+  </div>
+
+  <h2>Tu cuenta de GitHub</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">
+      Con tu cuenta puedes traer repos <b>privados</b> y abrir PRs. El token se guarda en el
+      servidor y <b>nunca entra al sandbox</b>.
+    </p>
+    <div class="row">
+      <button class="primary" id="ghLogin">Iniciar sesión con GitHub</button>
+      <span class="muted" id="ghState"></span>
+    </div>
+    <div id="ghDevice" style="display:none">
+      <p class="muted" style="margin:10px 0 4px">Abre este enlace y escribe el código:</p>
+      <p style="margin:0"><a id="ghUri" href="#" target="_blank" rel="noopener" style="color:var(--cian)">github.com/login/device</a>
+        &nbsp;·&nbsp; código: <b id="ghCode" style="font-size:1.3rem;letter-spacing:.1em"></b></p>
+      <p class="muted" style="margin:8px 0 0">Esperando a que autorices… esto puede tardar.</p>
+    </div>
+    <details style="margin-top:12px">
+      <summary class="muted">O pega un token a mano</summary>
+      <div class="row" style="margin-top:8px">
+        <input id="ghToken" type="password" placeholder="ghp_… o gho_…" autocomplete="off"
+               style="flex:1;min-width:180px;background:#0d0a1a;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font:inherit">
+        <button class="ghost" id="saveToken">Guardar</button>
+      </div>
+    </details>
+    <div id="accountOut"></div>
+  </div>
+
+  <h2>Publicar tu trabajo</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">
+      Empuja los cambios a una rama <code>movilclaw/…</code> y abre un PR. <b>Nunca a main</b>,
+      y el PR no se fusiona solo: eso es decisión tuya.
+    </p>
+    <div class="row">
+      <input id="prTask" placeholder="nombre de la tarea (ej. arreglar-encabezado)" autocomplete="off"
+             style="flex:1;min-width:180px;background:#0d0a1a;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font:inherit">
+      <button class="primary" id="pushPr">Abrir PR</button>
+    </div>
+    <label class="muted" style="display:block;margin-top:8px">
+      <input type="checkbox" id="askPass"> mi frase secreta (si la cuenta está sellada)
+    </label>
+    <div class="row" style="margin-top:6px">
+      <input id="passForPush" type="password" placeholder="tu frase secreta" autocomplete="off"
+             style="display:none;flex:1;min-width:180px;background:#0d0a1a;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font:inherit">
+    </div>
+    <div id="prOut"></div>
   </div>
 
   <h2>Consola</h2>
@@ -208,7 +255,7 @@ $("#create").addEventListener("click", async () => {
   try {
     const r = await call("/api/sandboxes", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ttlMinutes: ttl, repo: $("#repo").value.trim() }),
+      body: JSON.stringify({ ttlMinutes: ttl }),
     });
     toast("Creado " + r.id);
   } catch (e) { toast(e.message); }
@@ -295,26 +342,138 @@ async function tool(name, args) {
   return r.result;
 }
 
+/**
+ * Inicio de sesion con GitHub por device flow.
+ *
+ * Pedimos un codigo al servidor, lo mostramos, y esperamos. El token lo recibe el
+ * servidor, no esta pagina: aqui solo se ve el codigo que la persona teclea en GitHub.
+ */
+document.querySelector("#ghLogin").addEventListener("click", async (ev) => {
+  const state = document.querySelector("#ghState");
+  const box = document.querySelector("#ghDevice");
+  ev.target.disabled = true;
+  try {
+    const cfg = await call("/api/auth/github");
+    if (!cfg.configured) {
+      state.innerHTML = 'falta el <code>client_id</code>';
+      document.querySelector("#accountOut").innerHTML =
+        '<pre>' + esc("Para el inicio de sesion hace falta registrar una OAuth App:\n\n" +
+          cfg.howTo.map((s, i) => (i + 1) + ". " + s).join("\n")) + "</pre>";
+      toast("Falta registrar la app de GitHub (ver instrucciones)");
+      return;
+    }
+    const pending = await call("/api/auth/github/start", { method: "POST" });
+    document.querySelector("#ghDevice").style.display = "";
+    document.querySelector("#ghCode").textContent = pending.userCode;
+    const uri = document.querySelector("#ghUri");
+    uri.href = pending.verificationUri;
+    uri.textContent = pending.verificationUri.replace("https://", "");
+    state.textContent = "esperando…";
+    const done = await call("/api/auth/github/wait", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ deviceCode: pending.deviceCode, id: "github" }),
+    });
+    box.style.display = "none";
+    state.textContent = "conectado";
+    document.querySelector("#accountOut").innerHTML =
+      '<pre>' + esc("cuenta conectada por GitHub: " + JSON.stringify(done, null, 2)) + "</pre>";
+    toast("Cuenta conectada con " + done.fingerprint);
+  } catch (e) {
+    state.textContent = "";
+    document.querySelector("#ghDevice").style.display = "none";
+    toast(e.message);
+  } finally { ev.target.disabled = false; }
+});
+
+/** Guardar una cuenta. El token viaja una vez y no vuelve nunca en la respuesta. */
+document.querySelector("#saveToken").addEventListener("click", async (ev) => {
+  const token = document.querySelector("#ghToken").value.trim();
+  if (!token) { toast("Pega el token"); return; }
+  ev.target.disabled = true;
+  try {
+    const id = await activeId();
+    if (!id) return;
+    const r = await call("/api/sandboxes/" + id + "/account", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "github", token, scopes: ["repo", "read:org"] }),
+    });
+    // La respuesta trae tipo, huella y scopes. Jamas el token.
+    document.querySelector("#accountOut").innerHTML =
+      '<pre>' + esc("cuenta guardada\n" + JSON.stringify(r, null, 2)) + "</pre>";
+    document.querySelector("#ghToken").value = "";
+    toast("Cuenta guardada");
+  } catch (e) { toast(e.message); }
+  finally { ev.target.disabled = false; }
+});
+
+document.querySelector("#askPass").addEventListener("change", (ev) => {
+  document.querySelector("#passForPush").style.display = ev.target.checked ? "" : "none";
+});
+
 document.querySelector("#cloneBtn").addEventListener("click", async (ev) => {
   const id = await activeId();
   if (!id) return;
   const url = document.querySelector("#repoUrl").value.trim();
   if (!url) { toast("Pega la URL del repositorio"); return; }
+  const withAccount = document.querySelector("#useAccount").checked;
   ev.target.disabled = true;
   const out = document.querySelector("#repoOut");
-  out.innerHTML = '<p class="muted">Abriendo la red solo para traerlo…</p>';
+  out.innerHTML = '<p class="muted">' + (withAccount
+    ? "Clonando en el servidor con tu cuenta, y entregando el código sin credenciales…"
+    : "Abriendo la red solo para traerlo…") + "</p>";
   try {
-    const r = await call("/api/sandboxes/" + id + "/repo", {
+    if (withAccount) {
+      const r = await call("/api/sandboxes/" + id + "/repo-private", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accountId: "github", url }),
+      });
+      out.innerHTML = '<pre>' + esc([
+        "traido: " + r.repo,
+        "commit: " + r.commit,
+        "credenciales dentro del sandbox: " + (r.credentialsInSandbox.length ? r.credentialsInSandbox.join(", ") : "ninguna"),
+      ].join("\n")) + "</pre>";
+    } else {
+      const r = await call("/api/sandboxes/" + id + "/repo", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      out.innerHTML = '<pre>' + esc([
+        "traido: " + r.repo,
+        "commit: " + r.commit,
+        "archivos: " + r.files.slice(0, 8).join(", "),
+        "red: cerrada otra vez",
+      ].join("\n")) + "</pre>";
+    }
+    toast("Repo traido.");
+    await render();
+  } catch (e) {
+    out.innerHTML = '<p class="muted">' + esc(e.message) + "</p>";
+  } finally { ev.target.disabled = false; }
+});
+
+/** Empujar a movilclaw/… y abrir el PR. La rama main no es un destino valido. */
+document.querySelector("#pushPr").addEventListener("click", async (ev) => {
+  const id = await activeId();
+  if (!id) return;
+  const task = document.querySelector("#prTask").value.trim();
+  const passphrase = document.querySelector("#askPass").checked
+    ? document.querySelector("#passForPush").value : null;
+  ev.target.disabled = true;
+  const out = document.querySelector("#prOut");
+  out.innerHTML = '<p class="muted">Empujando a movilclaw/… y abriendo el PR…</p>';
+  try {
+    const r = await call("/api/sandboxes/" + id + "/pr", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ accountId: "github", task, passphrase }),
     });
     out.innerHTML = '<pre>' + esc([
-      "traido: " + r.repo,
-      "commit: " + r.commit,
-      "archivos: " + r.files.slice(0, 8).join(", "),
-      "red: cerrada otra vez",
-    ].join("\n")) + "</pre>";
-    toast("Repo traido. Red cerrada.");
+      "rama:  " + r.branch,
+      "base:  " + r.base + "  (solo lectura)",
+      "PR:    " + r.pullRequest,
+      "fusionado: " + r.merged,
+    ].join("\n")) + '</pre>' +
+      '<p class="muted" style="margin:8px 0 0">Ábrelo y revísalo. Fusionar es decisión tuya.</p>';
+    toast("PR abierto: " + r.branch);
   } catch (e) {
     out.innerHTML = '<p class="muted">' + esc(e.message) + "</p>";
   } finally { ev.target.disabled = false; }

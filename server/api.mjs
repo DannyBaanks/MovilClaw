@@ -9,9 +9,11 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { extname, join, normalize, resolve } from "node:path";
+import { homedir } from "node:os";
 import { OrchestratorError, createOrchestrator } from "./orchestrator.mjs";
 import { createSealedStore } from "./sealed.mjs";
 import { createCredentialStore } from "./credentials.mjs";
+import { describeConfiguration, instructions, requestDeviceCode, waitForToken } from "./oauth.mjs";
 import { open as openSealed, seal as sealBytes } from "../web/seal.mjs";
 import { issueGrant, verifyGrant } from "./grant.mjs";
 
@@ -104,9 +106,14 @@ function readRawBody(req, limit) {
   });
 }
 
+/** Device flows in progress, keyed by device_code. In memory: an unfinished login is not state. */
+const pendingCodes = new Map();
+
 export function createApi(
   orch = createOrchestrator(),
-  sealedStore = createSealedStore(process.env.MOVILCLAW_STATE ?? process.cwd()),
+  // State lives in its own directory, not in the project tree: a sealed blob is data,
+  // not source, and finding it inside the checkout invites committing it by accident.
+  sealedStore = createSealedStore(process.env.MOVILCLAW_STATE ?? join(homedir(), ".movilclaw")),
   credentials = createCredentialStore({ seal: sealBytes, open: openSealed }),
 ) {
   return createServer(async (req, res) => {
@@ -135,6 +142,44 @@ export function createApi(
       // GET /api/health
       if (req.method === "GET" && parts[1] === "health") {
         return send(res, 200, { ok: true, service: "movilclaw", version: 1 });
+      }
+
+      /**
+       * Sign in with GitHub, on the host.
+       *
+       * GET  /api/auth/github          what is configured, and how to register the app
+       * POST /api/auth/github/start    ask GitHub for a code to show the person
+       * POST /api/auth/github/wait     wait until the person approves, then keep the token
+       *
+       * The token never travels to a sandbox and is never returned by any of these routes.
+       */
+      if (parts[1] === "auth" && parts[2] === "github") {
+        if (parts.length === 3 && req.method === "GET") {
+          return send(res, 200, describeConfiguration());
+        }
+        if (parts[3] === "start" && req.method === "POST") {
+          const pending = await requestDeviceCode();
+          // The device_code stays here; only the short code the person types goes back.
+          pendingCodes.set(pending.deviceCode, pending);
+          return send(res, 201, {
+            ...instructions(pending),
+            note: "El codigo caduca. Cuando lo autorices, MovilClaw recibe el token y lo guarda en el servidor.",
+          });
+        }
+        if (parts[3] === "wait" && req.method === "POST") {
+          const body = await readBody(req);
+          const pending = pendingCodes.get(String(body.deviceCode ?? ""));
+          if (!pending) return send(res, 409, { error: "no hay ningun inicio de sesion en curso con ese codigo" });
+          const result = await waitForToken({ deviceCode: pending.deviceCode, intervalMs: pending.intervalMs });
+          pendingCodes.delete(pending.deviceCode);
+          // Stored exactly like a pasted token: in memory, or sealed if a passphrase came.
+          const stored = await credentials.put(body.id ?? "github", result.token, {
+            scopes: result.scopes,
+            passphrase: body.passphrase ?? null,
+          });
+          return send(res, 201, { ...stored, via: "github-device-flow" });
+        }
+        return send(res, 404, { error: "ruta de autenticacion desconocida" });
       }
 
       // GET /api/sandboxes  ·  POST /api/sandboxes
