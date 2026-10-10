@@ -6,9 +6,40 @@
  * makes explicitly (and should put behind TLS), not something this file does on its own.
  */
 import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { extname, join, normalize, resolve } from "node:path";
 import { OrchestratorError, createOrchestrator } from "./orchestrator.mjs";
+
+/**
+ * The PWA is served by this same process, on this same port.
+ *
+ * It used to live on a second port behind a proxy, and the very first thing a person did
+ * was open the API port, get `{"error":"not found"}` and reasonably conclude it was broken.
+ * One process, one port, one URL: /api/* is the API and everything else is the app.
+ */
+const WEB_ROOT = resolve(fileURLToPath(new URL("../web", import.meta.url)), ".");
+const STATIC_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".webmanifest": "application/manifest+json",
+};
+
+/** One file from web/, or null. Refuses anything that tries to climb out of the folder. */
+async function staticFile(pathname) {
+  const safe = normalize(pathname).replace(/^(\.[./\\])+/, "");
+  const file = join(WEB_ROOT, safe === "/" || safe === "." ? "index.html" : safe);
+  if (!file.startsWith(WEB_ROOT)) return null;
+  try {
+    return { body: await readFile(file), type: STATIC_TYPES[extname(file)] ?? "application/octet-stream" };
+  } catch {
+    return null;
+  }
+}
 
 const MAX_BODY_BYTES = 16 * 1024;
 
@@ -53,7 +84,24 @@ export function createApi(orch = createOrchestrator()) {
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean); // ["api","sandboxes","<id>","snapshot"]
     try {
-      if (parts[0] !== "api") return send(res, 404, { error: "not found" });
+      // Everything that is not the API is the app itself.
+      if (parts[0] !== "api") {
+        const asset = await staticFile(url.pathname);
+        if (asset) {
+          res.writeHead(200, {
+            "content-type": asset.type,
+            "content-length": asset.body.length,
+            "cache-control": "no-store",
+          });
+          return res.end(asset.body);
+        }
+        res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
+        return res.end(
+          "<!doctype html><meta charset=utf-8><body style=\"font:15px system-ui;background:#120d22;color:#f2eefc;padding:24px\">" +
+            "<h1>MovilClaw</h1><p>Esa ruta no existe. La app está en <a style=\"color:#00dec6\" href=\"/\">/</a> " +
+            "y la API en <code>/api/health</code>.</p></body>",
+        );
+      }
 
       // GET /api/health
       if (req.method === "GET" && parts[1] === "health") {
@@ -139,6 +187,8 @@ if (invokedDirectly) {
   const port = Number(process.env.PORT ?? 8788);
   const host = process.env.HOST ?? "127.0.0.1";
   createApi().listen(port, host, () => {
-    console.log(`MovilClaw listening on http://${host}:${port}`);
+    // One URL, and it is the app. The API is behind /api on the same origin.
+    console.log(`MovilClaw listo: abre http://${host}:${port} en el navegador`);
+    console.log(`(la API vive en http://${host}:${port}/api/health)`);
   });
 }

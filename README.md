@@ -22,12 +22,15 @@ Teléfono / navegador  ──►  PWA  ──►  Orquestador  ──►  sandbo
 
 ```bash
 npm run sandbox:build     # imagen del sandbox (una vez)
-npm run server            # orquestador en http://127.0.0.1:8788
-npm run web               # PWA en http://127.0.0.1:4173
+npm start                 # y abre http://127.0.0.1:8788
 ```
 
-La PWA habla con el orquestador **a través de su propio origen**, así que se puede abrir
-desde el móvil apuntando al servidor sin configurar CORS.
+**Un proceso, un puerto, una URL.** `/` es la app y `/api/*` es la API, en el mismo origen:
+se puede abrir desde el móvil apuntando al servidor, sin CORS y sin adivinar rutas.
+
+> Antes eran dos puertos con la app detrás de un proxy. Lo primero que hizo una persona fue
+> abrir el puerto de la API, recibir `{"error":"not found"}` y pensar, con razón, que estaba
+> roto. El diseño era malo, no el usuario.
 
 ## Lo que se comprobó de verdad
 
@@ -76,7 +79,7 @@ La regla que manda: **nunca se destruye trabajo que no se haya entregado antes.*
 | `server/docker.mjs` | **Todo** el aislamiento, en un solo sitio auditable |
 | `server/orchestrator.mjs` | Une el ciclo de vida, Docker y el reloj |
 | `server/api.mjs` | Cinco operaciones HTTP, sin dependencias |
-| `web/index.html` | La PWA |
+| `web/index.html` | La PWA (la sirve `server/api.mjs`, sin proxy) |
 | `tests/` | Ciclo de vida con reloj falso + aislamiento con Docker real |
 
 Sin dependencias de npm: solo Node 20+ y Docker.
@@ -86,7 +89,7 @@ Sin dependencias de npm: solo Node 20+ y Docker.
 - **No abre PRs** con un token efímero: la estructura está, la llamada a GitHub no.
 - **No hay reinyección**: el archivo se descarga, pero un sandbox nuevo aún no lo monta.
 - **No hay app iOS.** El cliente es web. Ver [docs/ENTORNO.md](docs/ENTORNO.md): el runner
-  de macOS puede compilar Swift, pero eso es otra entrega.
+  de macOS puede compilar Swift, y `ISyCodeMovil` es la plantilla, pero eso es otra entrega.
 - **Sin TLS ni autenticación en la API.** Escucha en loopback; exponerlo a una red es una
   decisión del operador, y debe ir detrás de TLS.
 

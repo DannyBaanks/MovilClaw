@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Pocket client and sandbox orchestrator for AutoClaw.",
   "scripts": {
+    "start": "node server/api.mjs",
     "server": "node server/api.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:isolation": "node --test tests/isolation.test.mjs",
-    "web": "node web/serve.mjs",
     "sandbox:build": "docker build -t movilclaw/sandbox:latest server/"
   },
   "engines": { "node": ">=20" },
