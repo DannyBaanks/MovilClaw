@@ -194,9 +194,23 @@ export function createApi(
         return send(res, 404, { error: "ruta de autenticacion desconocida" });
       }
 
+      /**
+       * Host-level account: the credential store belongs to the server, not to one sandbox,
+       * so saving a token must not require a sandbox to exist first. The token travels in
+       * the body once and is never echoed back.
+       */
+      if (parts[1] === "account" && parts.length === 2 && req.method === "POST") {
+        const body = await readBody(req);
+        const stored = await credentials.put(body.id ?? "github", String(body.token ?? ""), {
+          scopes: Array.isArray(body.scopes) ? body.scopes : [],
+          expiresAt: body.expiresAt ?? null,
+          passphrase: body.passphrase ?? null,
+        });
+        return send(res, 201, stored);
+      }
+
       // GET /api/sandboxes  ·  POST /api/sandboxes
-      if (parts[1] === "sandboxes" && parts.length === 2) {
-        if (req.method === "GET") return send(res, 200, { sandboxes: await orch.list() });
+      if (parts[1] === "sandboxes" && parts.length === 2) {        if (req.method === "GET") return send(res, 200, { sandboxes: await orch.list() });
         if (req.method === "POST") {
           const body = await readBody(req);
           const created = await orch.create({
