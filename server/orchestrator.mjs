@@ -192,14 +192,13 @@ export function createOrchestrator({
       const archive = await packWorkspace(directory);
       if (!archive?.length) throw new OrchestratorError("no se pudo empaquetar la carpeta (esta vacia?)");
 
-      // The archive is piped into the container by the caller of docker; here we do it
-      // through a base64 chunk so no bind mount is ever needed.
-      const b64 = Buffer.from(archive).toString("base64");
+      // The archive is piped into the container through stdin: no bind mount, and no
+      // command line big enough to hit the argv limit (spawn E2BIG).
       const target = `/work/${String(subPath).replace(/[^a-zA-Z0-9._-]/g, "")}`;
       const result = await docker.runCommand(sandbox.name, [
         "sh", "-c",
-        `mkdir -p ${target} && printf '%s' '${b64}' | base64 -d | tar -xzf - -C ${target}`,
-      ], { timeoutMs: 300_000 });
+        `mkdir -p ${target} && tar -xzf - -C ${target}`,
+      ], { timeoutMs: 300_000, input: archive });
       if (result.code !== 0) {
         throw new OrchestratorError(`no se pudo meter la carpeta: ${result.err.slice(0, 200)}`);
       }
@@ -242,8 +241,9 @@ export function createOrchestrator({
      * This closes the loop the download alone left open: `collectWork` hands the person
      * an archive, and this mounts its contents back as /work/app so the work continues
      * where it stopped. The bytes arrive from the caller (the browser, which opened the
-     * seal itself — the server never decrypts anything) and travel in as a base64 pipe,
-     * the same channel as `sendFolder`: no bind mount, no path into the host machine.
+     * seal itself — the server never decrypts anything) and travel in through stdin,
+     * the same channel as `sendFolder`: no bind mount, no path into the host machine,
+     * and nothing that can overflow the command line.
      */
     async injectWork(id, archive) {
       await sweep();
@@ -258,11 +258,10 @@ export function createOrchestrator({
         throw new OrchestratorError(`el archivo supera el limite de ${MAX_INJECT_BYTES / 1024 / 1024} MiB`);
       }
       if (sandbox.state.phase === PHASES.SUSPENDED) await docker.resume(sandbox.name);
-      const b64 = archive.toString("base64");
       const result = await docker.runCommand(sandbox.name, [
         "sh", "-c",
-        `rm -rf /work/app && mkdir -p /work/app && printf '%s' '${b64}' | base64 -d | tar -xzf - -C /work/app`,
-      ], { timeoutMs: 300_000 });
+        `rm -rf /work/app && mkdir -p /work/app && tar -xzf - -C /work/app`,
+      ], { timeoutMs: 300_000, input: archive });
       if (result.code !== 0) {
         throw new OrchestratorError(`no se pudo reinyectar el trabajo: ${result.err.slice(0, 200)}`);
       }
@@ -289,11 +288,10 @@ export function createOrchestrator({
       const cloned = await cloneOnHost({ remoteUrl, token });
       try {
         const archive = await packWorkspace(cloned.dir);
-        const b64 = Buffer.from(archive).toString("base64");
         const result = await docker.runCommand(sandbox.name, [
           "sh", "-c",
-          `rm -rf /work/app && mkdir -p /work/app && printf '%s' '${b64}' | base64 -d | tar -xzf - -C /work/app`,
-        ], { timeoutMs: 300_000 });
+          `rm -rf /work/app && mkdir -p /work/app && tar -xzf - -C /work/app`,
+        ], { timeoutMs: 300_000, input: archive });
         if (result.code !== 0) throw new OrchestratorError(`no se pudo entregar el codigo: ${result.err.slice(0, 200)}`);
         sandbox.repo = `${cloned.owner}/${cloned.repo}`;
         sandbox.repoCommit = cloned.commit;
@@ -430,11 +428,12 @@ export function createOrchestrator({
           const content = typeof args.content === "string" ? args.content : "";
           if (content.length > 1_000_000) throw new OrchestratorError("el contenido supera 1 MB");
           // Written through a file, not a shell, so the content is never parsed as code.
+          // The base64 travels in on stdin, never on the command line.
           const encoded = Buffer.from(content, "utf8").toString("base64");
           const result = await docker.runCommand(sandbox.name, [
             "sh", "-c",
-            `mkdir -p "$(dirname "${repo}/${path}")" && printf '%s' '${encoded}' | base64 -d > "${repo}/${path}"`,
-          ]);
+            `mkdir -p "$(dirname "${repo}/${path}")" && base64 -d > "${repo}/${path}"`,
+          ], { input: encoded });
           if (result.code !== 0) throw new OrchestratorError(`no se puede escribir ${path}: ${result.err.slice(0, 200)}`);
           return { path, bytes: Buffer.byteLength(content, "utf8") };
         }
@@ -466,8 +465,8 @@ export function createOrchestrator({
           const updated = read.out.replace(from, to);
           const encoded = Buffer.from(updated, "utf8").toString("base64");
           await docker.runCommand(sandbox.name, [
-            "sh", "-c", `printf '%s' '${encoded}' | base64 -d > "${repo}/${path}"`,
-          ]);
+            "sh", "-c", `base64 -d > "${repo}/${path}"`,
+          ], { input: encoded });
           return { path, replaced: 1 };
         }
         case "git": {

@@ -55,11 +55,19 @@ export function runArgs(name, spec = DEFAULT_SPEC) {
   ];
 }
 
-/** Run one docker command and collect its output. Never builds a shell string. */
+/**
+ * Run one docker command and collect its output. Never builds a shell string.
+ *
+ * `input` (a Buffer or string) is written to the child's stdin, which lets a whole
+ * archive travel through a pipe instead of the command line: argv has a hard size
+ * limit (`spawn E2BIG`, a few megabytes), stdin does not.
+ */
 export function dockerSpawn(spawn = nodeSpawn) {
-  return (args, { timeoutMs = 60_000 } = {}) =>
+  return (args, { timeoutMs = 60_000, input = null } = {}) =>
     new Promise((resolve, reject) => {
-      const child = spawn("docker", args, { stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn("docker", args, {
+        stdio: [input === null ? "ignore" : "pipe", "pipe", "pipe"],
+      });
       let out = "";
       let err = "";
       const timer = setTimeout(() => {
@@ -69,6 +77,11 @@ export function dockerSpawn(spawn = nodeSpawn) {
       child.stdout?.on("data", (d) => { out += d; });
       child.stderr?.on("data", (d) => { err += d; });
       child.on("error", (e) => { clearTimeout(timer); reject(new DockerError(e.message)); });
+      if (input !== null) {
+        // Docker may exit before reading everything; the close handler reports that.
+        child.stdin.on("error", () => {});
+        child.stdin.end(input);
+      }
       child.on("close", (code) => {
         clearTimeout(timer);
         if (code === 0) resolve({ out: out.trim(), err: err.trim() });
@@ -123,10 +136,16 @@ export function realDocker(run = dockerSpawn()) {
      * The terminal and the repository tools need to know *whether* a command failed, not
      * only what it printed. The argv is a list, never a shell string, so nothing the caller
      * sends is interpreted by a shell.
+     *
+     * With `input`, the command runs under `docker exec -i` and the bytes arrive through
+     * stdin — the only channel big enough for a whole repository.
      */
-    async runCommand(name, argv, { timeoutMs = 120_000 } = {}) {
+    async runCommand(name, argv, { timeoutMs = 120_000, input = null } = {}) {
       try {
-        const { out, err } = await run(["exec", name, ...argv], { timeoutMs });
+        const { out, err } = await run(
+          ["exec", ...(input === null ? [] : ["-i"]), name, ...argv],
+          { timeoutMs, input },
+        );
         return { code: 0, out, err };
       } catch (error) {
         // A non-zero exit is a result, not an internal failure: report it instead of throwing.

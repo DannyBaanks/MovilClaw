@@ -25,15 +25,18 @@ const skip = !hasImage ? "needs Docker and `npm run sandbox:build`" : false;
 /** A daemon that records what it was asked to do and answers with a fixed listing. */
 function fakeDocker(listing = "a.txt\nb.txt") {
   const commands = [];
+  const inputs = [];
   return {
     commands,
+    inputs,
     async start() {},
     async pause() {},
     async resume() {},
     async stop() {},
     async exec() { return { code: 0, out: "", err: "" }; },
-    async runCommand(_name, argv) {
+    async runCommand(_name, argv, options = {}) {
       commands.push(argv);
+      inputs.push(options.input ?? null);
       if (argv[0] === "ls") return { code: 0, out: listing, err: "" };
       return { code: 0, out: "", err: "" };
     },
@@ -66,19 +69,52 @@ test("a destroyed sandbox cannot receive work", async () => {
   );
 });
 
-test("the archive travels in as a base64 tar pipe, never as a mount", async () => {
+test("the archive travels in through stdin, never as a mount nor on the command line", async () => {
   const docker = fakeDocker("README.md\nsrc\n");
   const orch = createOrchestrator({ docker });
   const { id } = await orch.create({ ttlMinutes: 30 });
-  const result = await orch.injectWork(id, Buffer.from("archive-bytes"));
-  const pipe = docker.commands.find((argv) => argv[0] === "sh");
-  assert.ok(pipe, "the injection must run a command");
-  const script = pipe[2];
-  assert.match(script, /base64 -d \| tar -xzf - -C \/work\/app/);
+  const archive = Buffer.from("archive-bytes");
+  const result = await orch.injectWork(id, archive);
+  const at = docker.commands.findIndex((argv) => argv[0] === "sh");
+  assert.ok(at >= 0, "the injection must run a command");
+  const script = docker.commands[at][2];
+  assert.match(script, /tar -xzf - -C \/work\/app/);
   assert.match(script, /rm -rf \/work\/app/);
   assert.doesNotMatch(script, /--mount|\/home\//, "no path into the host may appear");
+  // The bytes must NOT be in argv: that is what overflowed with `spawn E2BIG` on a real repo.
+  assert.ok(!script.includes("archive-bytes"), "the archive must not ride the command line");
+  assert.deepEqual(docker.inputs[at], archive, "the archive must arrive as stdin input");
   assert.deepEqual(result.files, ["README.md", "src"]);
   assert.equal(result.into, "/work/app");
+});
+
+test("dockerSpawn writes input to the child's stdin, never into argv", async () => {
+  // The exact mechanism that fixes `spawn E2BIG`: a big payload goes in through the
+  // pipe, so the command line stays small no matter how large the archive is.
+  const { dockerSpawn } = await import("../server/docker.mjs");
+  const { PassThrough } = await import("node:stream");
+  let written = "";
+  let seenArgs = null;
+  const fakeSpawn = (_cmd, args) => {
+    seenArgs = args;
+    const child = {
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill() {},
+      on(event, handler) {
+        if (event === "close") setImmediate(() => handler(0));
+        return this;
+      },
+    };
+    child.stdin.on("data", (d) => { written += d; });
+    return child;
+  };
+  const payload = "x".repeat(4 * 1024 * 1024);
+  const run = dockerSpawn(fakeSpawn);
+  await run(["exec", "-i", "c", "sh", "-c", "tar -xzf - -C /work/app"], { input: payload });
+  assert.equal(written.length, payload.length, "the whole payload must reach stdin");
+  assert.ok(!seenArgs.some((a) => String(a).includes("xxxx")), "no payload bytes in argv");
 });
 
 test("round trip: work collected from one sandbox reads back in another", { skip }, async () => {
