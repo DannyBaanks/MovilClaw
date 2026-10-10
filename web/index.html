@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MovilClaw</title>
+<style>
+  :root { color-scheme: dark; --bg:#120d22; --card:#1e1638; --ink:#f2eefc; --muted:#a99fc4;
+          --coral:#ce3434; --cian:#00dec6; --line:#332a55; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui,-apple-system,sans-serif;
+         padding:16px; max-width:640px; margin-inline:auto; }
+  h1 { font-size:1.5rem; margin:0 0 2px; }
+  h2 { font-size:1rem; margin:20px 0 8px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .tag { color:var(--cian); font-size:.8rem; letter-spacing:.08em; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:10px 0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button { font:inherit; border:0; border-radius:10px; padding:10px 14px; background:#2b2250; color:var(--ink);
+           cursor:pointer; min-height:44px; }
+  button.primary { background:var(--coral); color:#fff; font-weight:600; }
+  button.ghost { background:transparent; border:1px solid var(--line); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:.78rem; font-weight:600; }
+  .active { background:#1d4d3a; color:#8ff0c4; } .suspended { background:#4d3f1d; color:#f0dc8f; }
+  .destroyed { background:#4a1f28; color:#f09aa8; }
+  .muted { color:var(--muted); font-size:.88rem; }
+  code { background:#0d0a1a; padding:1px 5px; border-radius:5px; font-size:.86rem; }
+  pre { background:#0d0a1a; padding:10px; border-radius:8px; overflow-x:auto; font-size:.8rem; margin:8px 0 0; }
+  #toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#2b2250; padding:10px 16px;
+           border-radius:10px; opacity:0; pointer-events:none; transition:opacity .2s; max-width:90vw; }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+  <p class="tag">AUTOCLAW</p>
+  <h1>MovilClaw</h1>
+  <p class="muted">Sandboxes que nacen, trabajan, se guardan y se destruyen solos.</p>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <b id="conn">Comprobando…</b>
+      <button class="ghost" id="refresh">Refrescar</button>
+    </div>
+  </div>
+
+  <h2>Crear sandbox</h2>
+  <div class="card">
+    <div class="row">
+      <label class="muted" for="repo">Repo</label>
+      <input id="repo" placeholder="usuario/repositorio" autocomplete="off"
+             style="flex:1;min-width:180px;background:#0d0a1a;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font:inherit">
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span class="muted">Caduca tras</span>
+      <button class="ttl" data-min="30">30 min</button>
+      <button class="ttl" data-min="120">2 h</button>
+      <button class="ttl" data-min="720">12 h</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="create">Crear sandbox</button>
+    </div>
+    <p class="muted" style="margin-bottom:0">La cuenta atrás empieza con el último uso real, no con la creación.</p>
+  </div>
+
+  <h2>Sandboxes</h2>
+  <div id="list"></div>
+
+  <div id="toast"></div>
+<script>
+// Same origin as the page: the static server proxies /api to the orchestrator.
+const API = "";
+let ttl = 120;
+
+const $ = (s) => document.querySelector(s);
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+async function call(path, options) {
+  const res = await fetch(API + path, options);
+  const text = await res.text();
+  let data; try { data = JSON.parse(text); } catch { data = { error: text }; }
+  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
+function fmt(ms) {
+  const m = Math.ceil(ms / 60000);
+  if (m < 60) return m + " min";
+  return Math.floor(m / 60) + " h " + (m % 60) + " min";
+}
+function esc(s) { return String(s).replace(/[<>&"]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;", '"':"&quot;" }[c])); }
+
+async function health() {
+  try { await call("/api/health"); $("#conn").textContent = "Orquestador conectado"; }
+  catch { $("#conn").textContent = "Sin orquestador: arranca `npm run server`"; }
+}
+
+async function render() {
+  const box = $("#list");
+  try {
+    const { sandboxes } = await call("/api/sandboxes");
+    if (!sandboxes.length) { box.innerHTML = '<p class="muted">Todavía no hay ninguno.</p>'; return; }
+    box.innerHTML = sandboxes.map((s) => `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <code>${esc(s.id)}</code>
+          <span class="pill ${s.phase}">${esc(s.phase)}</span>
+        </div>
+        <p class="muted" style="margin:6px 0">${esc(s.explanation)}</p>
+        <div class="row">
+          <button data-act="use" data-id="${esc(s.id)}">Usar (reinicia la cuenta)</button>
+          <button data-act="snapshot" data-id="${esc(s.id)}">Descargar archivo</button>
+          <button data-act="destroy" data-id="${esc(s.id)}">Destruir</button>
+        </div>
+      </div>`).join("");
+  } catch (e) { box.innerHTML = '<p class="muted">' + esc(e.message) + "</p>"; }
+}
+
+document.addEventListener("click", async (ev) => {
+  const t = ev.target;
+  if (t.classList.contains("ttl")) {
+    ttl = Number(t.dataset.min);
+    document.querySelectorAll(".ttl").forEach((b) => { b.className = "ttl" + (b === t ? " primary" : ""); });
+    return;
+  }
+  const act = t.dataset?.act;
+  if (!act) return;
+  const id = t.dataset.id;
+  t.disabled = true;
+  try {
+    if (act === "use") { const r = await call("/api/sandboxes/" + id, { method: "POST" }); toast("Usado: quedan " + fmt(r.remainingMs)); }
+    if (act === "destroy") {
+      try { await call("/api/sandboxes/" + id, { method: "DELETE" }); toast("Destruido"); }
+      catch (e) {
+        if (/snapshot/i.test(e.message)) {
+          if (confirm("Aún no has descargado el archivo.\n¿Descargarlo ahora y luego destruir?")) {
+            await download(id); await call("/api/sandboxes/" + id, { method: "DELETE" }); toast("Guardado y destruido");
+          }
+        } else throw e;
+      }
+    }
+    if (act === "snapshot") await download(id);
+  } catch (e) { toast(e.message); }
+  finally { t.disabled = false; await render(); }
+});
+
+async function download(id) {
+  const res = await fetch(API + "/api/sandboxes/" + id + "/snapshot");
+  if (!res.ok) throw new Error("no se pudo descargar el archivo");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = id + ".movilclaw.json"; a.click();
+  URL.revokeObjectURL(url);
+  toast("Archivo guardado: puedes reinyectarlo en un sandbox nuevo");
+}
+
+$("#create").addEventListener("click", async () => {
+  $("#create").disabled = true;
+  try {
+    const r = await call("/api/sandboxes", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ttlMinutes: ttl, repo: $("#repo").value.trim() }),
+    });
+    toast("Creado " + r.id);
+  } catch (e) { toast(e.message); }
+  finally { $("#create").disabled = false; await render(); }
+});
+$("#refresh").addEventListener("click", render);
+document.querySelector('.ttl[data-min="120"]').classList.add("primary");
+
+health(); render(); setInterval(render, 15000);
+</script>
+</body>
+</html>

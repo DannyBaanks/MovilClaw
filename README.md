@@ -1,56 +1,94 @@
 # MovilClaw
 
-Cliente de bolsillo y orquestador de sandboxes para AutoClaw. **Proyecto nuevo**, hecho con
-AutoClaw y pensado para que otra gente use AutoClaw sin montar nada en su máquina.
+Cliente de bolsillo y orquestador de **sandboxes kamikaze** para AutoClaw. Proyecto nuevo,
+hecho con AutoClaw y pensado para que otra gente use AutoClaw sin montar nada en su máquina.
 
-## Estado
-
-**Nada implementado todavía.** Este commit solo crea el proyecto, su razón de ser y su
-política de aislamiento. El código entra después, y cada pieza se anuncia como funciona
-solo cuando hay una prueba que la respalde.
-
-## La idea
-
-Un agente necesita un sitio donde trabajar que no sea la máquina de quien lo usa. MovilClaw
-da eso: **sandboxes que se crean, se usan, se guardan y se destruyen solos**.
+## Qué hace hoy (probado, no prometido)
 
 ```
-Teléfono / navegador
-        │  (emparejar, pedir sandbox, ver estado, abrir PR, bajar el archivo)
-        ▼
-   Orquestador  ──►  1..N sandboxes aislados
-                       ├── sin red
-                       ├── sin acceso al disco del anfitrión
-                       ├── token de GitHub efímero, un repo
-                       └── caducidad automática
+Teléfono / navegador  ──►  PWA  ──►  Orquestador  ──►  sandbox aislado
+                                      (5 a la vez)      ├── sin red
+                                                        ├── sin tu disco
+                                                        ├── sin root
+                                                        └── caduca solo
 ```
 
-Cada sandbox es **kamikaze por diseño**: nace con una cuenta atrás que elige la persona.
-Cuando expira, el cómputo se apaga. **Antes de borrar nada, primero se guarda.**
+- **Crear** un sandbox con la cuenta atrás que elijas: 30 min, 2 h o 12 h.
+- **Usarlo** reinicia la cuenta. Un sandbox no muere mientras trabajas.
+- **Descargar** el archivo del sandbox y guardarlo en el teléfono.
+- **Destruir**: se niega si aún no descargaste el archivo.
 
-## Qué reutiliza
+## Arrancarlo
 
-| De dónde | Qué | Por qué sirve |
-| --- | --- | --- |
-| `ISyCodeMovil` · `Bridge/bin/*.mjs` | Protocolo de emparejamiento y orquestación de runtimes (Node ESM) | Corre en Linux y ya está probado |
-| `ISyCodeMovil` · `Catalog/models.json` | Catálogo GUS: 22 modelos con SHA-256 y licencia | Dato puro, sin dependencias |
-| `ISyCodeMovil` · `docs/isycode-mobile-host-contract-v1.md` | Contrato de host/cliente v1 | Ya define quién manda: el host autoriza, el cliente muestra |
-| `ISyCode` | `AGENTS.md`: autoridad explícita, journal, sin claims sin prueba | Es la disciplina que este proyecto hereda |
+```bash
+npm run sandbox:build     # imagen del sandbox (una vez)
+npm run server            # orquestador en http://127.0.0.1:8788
+npm run web               # PWA en http://127.0.0.1:4173
+```
 
-## Qué NO reutiliza
+La PWA habla con el orquestador **a través de su propio origen**, así que se puede abrir
+desde el móvil apuntando al servidor sin configurar CORS.
 
-- **No hereda la app Swift** de ISyCodeMovil como base: una app iOS necesita macOS y Xcode,
-  que no existen en el entorno donde se está construyendo esto. Ver `docs/ENTORNO.md`.
+## Lo que se comprobó de verdad
 
-## Principios
+Pruebas de aislamiento **con Docker real**, no simuladas (`npm run test:isolation`):
 
-1. **Sin red por defecto.** Un sandbox no puede sacar el repo de tu máquina.
-2. **Sin montajes del anfitrión.** Solo ve su propio volumen.
-3. **Credenciales efímeras.** El token de GitHub vive lo que vive el sandbox, y solo alcanza
-   el repo para el que se pidió.
-4. **Guardar antes de borrar.** La caducidad no destruye trabajo no entregado.
-5. **Prometer solo lo verificable.** Ver `docs/AISLAMIENTO.md`: dice explícitamente lo que
-   **no** se garantiza.
+| Prueba | Resultado |
+| --- | --- |
+| Salir a internet desde el sandbox | `OSError: [Errno 101] Network unreachable` |
+| Leer `/home/danny` desde el sandbox | `oculto` |
+| Ejecutar como root | `id -u` → `1000` |
+| Reservar 1 GiB con tope de 256m | rechazado por el kernel |
+| Destruir y dejar restos | contenedor y volumen eliminados |
+
+Y el ciclo de vida completo, con Docker de verdad:
+
+```
+crear → activo → (inactividad) → SUSPENDIDO → [descargar archivo] → DESTRUIDO
+                                      │
+                                      └── sin el archivo descargado, se queda aquí
+```
+
+## Tres cosas que aprendimos probando (y que valen más que el código)
+
+1. **`docker rm --volumes` no borra volúmenes con nombre.** El contenedor desaparece y el
+   dato sigue ahí, montable otra vez. La política decía "borrado irreversible" y era falso.
+   Ahora el volumen se borra explícitamente, y si falla se avisa en vez de callar.
+2. **`import.meta.url` viene percent-encoded.** Compararlo con una ruta armada a mano nunca
+   coincide si la carpeta lleva un espacio ("ISyCo Git"): el servidor no arrancaba y no decía
+   por qué. Se usa `fileURLToPath`.
+3. **Un test que pasa por el motivo equivocado no prueba nada.** El de "pasa al enlazar" se
+   ponía en rojo por los permisos del archivo, no por la cadena rota.
+
+## Aislamiento: la promesa honesta
+
+Lo que **sí** se garantiza está en [docs/AISLAMIENTO.md](docs/AISLAMIENTO.md), con su
+"cómo se comprueba" y tres cosas que **no** se garantizan: invisibilidad frente al operador
+del servidor, resistencia a un exploit del kernel, y lo que el propio usuario pegue dentro.
+
+La regla que manda: **nunca se destruye trabajo que no se haya entregado antes.**
+
+## Estructura
+
+| Ruta | Qué es |
+| --- | --- |
+| `server/lifecycle.mjs` | La máquina de estados: activo → suspendido → destruido |
+| `server/docker.mjs` | **Todo** el aislamiento, en un solo sitio auditable |
+| `server/orchestrator.mjs` | Une el ciclo de vida, Docker y el reloj |
+| `server/api.mjs` | Cinco operaciones HTTP, sin dependencias |
+| `web/index.html` | La PWA |
+| `tests/` | Ciclo de vida con reloj falso + aislamiento con Docker real |
+
+Sin dependencias de npm: solo Node 20+ y Docker.
+
+## Qué NO hay todavía
+
+- **No abre PRs** con un token efímero: la estructura está, la llamada a GitHub no.
+- **No hay reinyección**: el archivo se descarga, pero un sandbox nuevo aún no lo monta.
+- **No hay app iOS.** El cliente es web. Ver [docs/ENTORNO.md](docs/ENTORNO.md): el runner
+  de macOS puede compilar Swift, pero eso es otra entrega.
+- **Sin TLS ni autenticación en la API.** Escucha en loopback; exponerlo a una red es una
+  decisión del operador, y debe ir detrás de TLS.
 
 ## Licencia
 
