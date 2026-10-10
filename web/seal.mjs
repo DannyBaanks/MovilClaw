@@ -97,11 +97,20 @@ export function inspect(sealed) {
 }
 
 function b64(bytes) {
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s);
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(bytes).toString("base64");
+  }
+  const chunks = [];
+  const chunkSize = 0x8000; // 32KB chunk avoids call stack size limits
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize)));
+  }
+  return btoa(chunks.join(""));
 }
 function unb64(text) {
+  if (typeof Buffer !== "undefined") {
+    return new Uint8Array(Buffer.from(text, "base64"));
+  }
   const raw = atob(text);
   const out = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);

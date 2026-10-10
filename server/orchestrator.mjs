@@ -430,9 +430,12 @@ export function createOrchestrator({
           // Written through a file, not a shell, so the content is never parsed as code.
           // The base64 travels in on stdin, never on the command line.
           const encoded = Buffer.from(content, "utf8").toString("base64");
+          const targetFile = `${repo}/${path}`;
           const result = await docker.runCommand(sandbox.name, [
             "sh", "-c",
-            `mkdir -p "$(dirname "${repo}/${path}")" && base64 -d > "${repo}/${path}"`,
+            'mkdir -p "$(dirname "$1")" && base64 -d > "$1"',
+            "write",
+            targetFile,
           ], { input: encoded });
           if (result.code !== 0) throw new OrchestratorError(`no se puede escribir ${path}: ${result.err.slice(0, 200)}`);
           return { path, bytes: Buffer.byteLength(content, "utf8") };
@@ -464,8 +467,11 @@ export function createOrchestrator({
           if (occurrences > 1) throw new OrchestratorError(`el texto aparece ${occurrences} veces; usa mas contexto`);
           const updated = read.out.replace(from, to);
           const encoded = Buffer.from(updated, "utf8").toString("base64");
+          const targetFile = `${repo}/${path}`;
           await docker.runCommand(sandbox.name, [
-            "sh", "-c", `base64 -d > "${repo}/${path}"`,
+            "sh", "-c", 'base64 -d > "$1"',
+            "edit",
+            targetFile,
           ], { input: encoded });
           return { path, replaced: 1 };
         }
@@ -556,7 +562,7 @@ function safePath(value, allowRoot = false) {
     if (allowRoot) return ".";
     throw new OrchestratorError("falta la ruta");
   }
-  if (path.startsWith("/") || path.includes("..") || path.includes("\0")) {
+  if (path.startsWith("/") || path.includes("..") || path.includes("\0") || path.includes("\n") || path.includes("\r")) {
     throw new OrchestratorError("la ruta debe ser relativa y quedarse dentro del repositorio");
   }
   return path.replace(/^\.\//, "");

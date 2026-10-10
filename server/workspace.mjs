@@ -11,7 +11,7 @@
  * files and credentials are excluded, always, and the report says exactly what was left
  * out. A silent exclusion would be as bad as a silent inclusion.
  */
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { stat } from "node:fs/promises";
 
@@ -142,7 +142,7 @@ export async function unpackInto(directory, archive) {
   const info = await stat(directory).catch(() => null);
   if (!info?.isDirectory()) throw new WorkspaceError("el destino no es una carpeta");
   await new Promise((resolve, reject) => {
-    const child = require("node:child_process").spawn("tar", ["-xzf", "-", "-C", directory], {
+    const child = spawn("tar", ["-xzf", "-", "-C", directory], {
       stdio: ["pipe", "ignore", "pipe"],
     });
     child.on("error", reject);

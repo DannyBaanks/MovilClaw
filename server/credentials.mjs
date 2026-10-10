@@ -142,8 +142,10 @@ export function createCredentialStore({ seal, open } = {}) {
  */
 export async function cloneWithToken(run, { url, token, into }) {
   // The token travels in a header, not in the URL, so it cannot end up in .git/config.
+  // Git speaks HTTP Basic auth and expects the token as password with x-access-token.
+  const basic = Buffer.from(`x-access-token:${token}`, "utf8").toString("base64");
   await run("git", [
-    "-c", `http.extraheader=Authorization: Bearer ${token}`,
+    "-c", `http.extraheader=Authorization: Basic ${basic}`,
     "clone", "--depth", "1", url, into,
   ], { timeoutMs: 300_000 });
   // Belt and braces: whatever git wrote, the remote is left without credentials.

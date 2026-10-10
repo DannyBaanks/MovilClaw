@@ -57,7 +57,7 @@ test("a repository URL cannot point at a private address", () => {
 });
 
 test("a repo path cannot escape the working directory", () => {
-  for (const bad of ["../../etc/passwd", "/etc/passwd", "a/../../../b"]) {
+  for (const bad of ["../../etc/passwd", "/etc/passwd", "a/../../../b", "a\nb", "a\rb"]) {
     assert.throws(() => safePathForTests(bad), /relativa|dentro del repositorio/);
   }
   assert.equal(safePathForTests("src/app.ts"), "src/app.ts");
