@@ -116,5 +116,43 @@ export function realDocker(run = dockerSpawn()) {
       const { out } = await run(["exec", name, ...argv]);
       return out;
     },
+
+    /**
+     * Run one command and return both output and exit code.
+     *
+     * The terminal and the repository tools need to know *whether* a command failed, not
+     * only what it printed. The argv is a list, never a shell string, so nothing the caller
+     * sends is interpreted by a shell.
+     */
+    async runCommand(name, argv, { timeoutMs = 120_000 } = {}) {
+      try {
+        const { out, err } = await run(["exec", name, ...argv], { timeoutMs });
+        return { code: 0, out, err };
+      } catch (error) {
+        // A non-zero exit is a result, not an internal failure: report it instead of throwing.
+        const message = error instanceof Error ? error.message : String(error);
+        const match = /failed \((\d+)\): ([\s\S]*)$/.exec(message);
+        return { code: match ? Number(match[1]) : 1, out: "", err: match ? match[2] : message };
+      }
+    },
+
+    // ── network attachments, used by the phase scheduler ──────────────────────
+    async attachedNetworks(name) {
+      const { out } = await run([
+        "inspect", name,
+        "--format", "{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}",
+      ]);
+      return out.split(/\s+/).filter(Boolean);
+    },
+    async ensureNetwork(network) {
+      // Created if missing; "already exists" is not an error.
+      await run(["network", "create", network]).catch(() => {});
+    },
+    async connectNetwork(name, network) {
+      await run(["network", "connect", network, name]);
+    },
+    async disconnectNetwork(name, network) {
+      await run(["network", "disconnect", network, name]).catch(() => {});
+    },
   };
 }

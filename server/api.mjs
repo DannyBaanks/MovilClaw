@@ -171,6 +171,26 @@ export function createApi(orch = createOrchestrator(), sealedStore = createSeale
           });
           return res.end(bytes);
         }
+        /** What the sandbox may reach right now. */
+        if (op === "network" && req.method === "GET") {
+          return send(res, 200, await orch.network(id));
+        }
+
+        /** Clone a public repository. The network opens for this and closes right after. */
+        if (op === "repo" && req.method === "POST") {
+          const body = await readBody(req);
+          const result = await orch.cloneRepo(id, body.url);
+          return send(res, 201, result);
+        }
+
+        /** One tool call: read, write, edit, search, list, git, commit or run. */
+        if (op === "tool" && req.method === "POST") {
+          const body = await readBody(req);
+          const name = String(body.name ?? "");
+          const result = await orch.tool(id, name, body.args ?? {});
+          return send(res, 200, { tool: name, result });
+        }
+
         /**
          * Sealing. The browser sends ciphertext it produced itself; this server only
          * stores it and can never open it. That is the whole point of these routes.

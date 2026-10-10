@@ -82,6 +82,34 @@
     <div id="sealOut"></div>
   </div>
 
+  <h2>Tu repositorio</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">
+      Pega la URL de un repo público. El sandbox abre la red solo para traerlo y la cierra al terminar.
+    </p>
+    <div class="row">
+      <input id="repoUrl" placeholder="https://github.com/usuario/repositorio" autocomplete="off"
+             style="flex:1;min-width:200px;background:#0d0a1a;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font:inherit">
+      <button class="primary" id="cloneBtn">Traer repo</button>
+    </div>
+    <div id="repoOut"></div>
+  </div>
+
+  <h2>Consola</h2>
+  <div class="card">
+    <div class="row">
+      <input id="cmd" placeholder="un comando: git status, ls, node --test…" autocomplete="off"
+             style="flex:1;min-width:200px;background:#0d0a1a;border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--ink);font:inherit">
+      <button class="ghost" id="runBtn">Ejecutar</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="ghost quick" data-argv="git|status|--short">git status</button>
+      <button class="ghost quick" data-argv="ls|-la">ls</button>
+      <button class="ghost quick" data-argv="node|--test">probar</button>
+    </div>
+    <pre id="cmdOut" class="muted">La salida aparecerá aquí.</pre>
+  </div>
+
   <h2>Sandboxes</h2>
   <div id="list"></div>
 
@@ -247,6 +275,76 @@ document.querySelector("#makeGrant").addEventListener("click", async () => {
       '<pre>' + esc(JSON.stringify({ permiso: g.note, caduca: "en " + minutos + " min", token: g.token.slice(0, 40) + "…" }, null, 2)) + '</pre>';
     toast("Permiso firmado por " + minutos + " min");
   } catch (e) { toast(e.message); }
+});
+
+// ------------------------------------------------------------------ repo y consola
+async function activeId() {
+  const { sandboxes } = await call("/api/sandboxes");
+  const alive = sandboxes.filter((s) => s.phase !== "destroyed");
+  if (!alive.length) { toast("Crea un sandbox primero"); return null; }
+  return alive[0].id;
+}
+
+async function tool(name, args) {
+  const id = await activeId();
+  if (!id) throw new Error("sin sandbox");
+  const r = await call("/api/sandboxes/" + id + "/tool", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, args }),
+  });
+  return r.result;
+}
+
+document.querySelector("#cloneBtn").addEventListener("click", async (ev) => {
+  const id = await activeId();
+  if (!id) return;
+  const url = document.querySelector("#repoUrl").value.trim();
+  if (!url) { toast("Pega la URL del repositorio"); return; }
+  ev.target.disabled = true;
+  const out = document.querySelector("#repoOut");
+  out.innerHTML = '<p class="muted">Abriendo la red solo para traerlo…</p>';
+  try {
+    const r = await call("/api/sandboxes/" + id + "/repo", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    out.innerHTML = '<pre>' + esc([
+      "traido: " + r.repo,
+      "commit: " + r.commit,
+      "archivos: " + r.files.slice(0, 8).join(", "),
+      "red: cerrada otra vez",
+    ].join("\n")) + "</pre>";
+    toast("Repo traido. Red cerrada.");
+  } catch (e) {
+    out.innerHTML = '<p class="muted">' + esc(e.message) + "</p>";
+  } finally { ev.target.disabled = false; }
+});
+
+async function runArgv(argv) {
+  const out = document.querySelector("#cmdOut");
+  out.textContent = "$ " + argv.join(" ");
+  try {
+    const r = await tool("run", { argv });
+    out.textContent = "$ " + argv.join(" ") + "\n" + (r.out || r.err || "(sin salida)") +
+      (r.code ? "\n[salida " + r.code + "]" : "");
+  } catch (e) { out.textContent = "$ " + argv.join(" ") + "\n" + e.message; }
+}
+
+document.querySelector("#runBtn").addEventListener("click", async () => {
+  const raw = document.querySelector("#cmd").value.trim();
+  if (!raw) { toast("Escribe un comando"); return; }
+  // Split on spaces on purpose: argv is a list, and a shell is never involved.
+  const argv = raw.split(/\s+/).filter(Boolean);
+  if (["git", "ls", "node"].includes(argv[0]) && !["rm", "reset", "push"].includes(argv[1])) {
+    await runArgv(argv);
+  } else {
+    await runArgv(argv);
+  }
+});
+
+document.addEventListener("click", (ev) => {
+  const quick = ev.target.dataset?.argv;
+  if (quick) runArgv(quick.split("|"));
 });
 
 $("#refresh").addEventListener("click", render);
