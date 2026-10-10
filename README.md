@@ -19,6 +19,11 @@ Teléfono / navegador  ──►  PWA  ──►  Orquestador  ──►  sandbo
 - **Destruir**: se niega si aún no descargaste el archivo.
 - **Traer un repositorio** público: el sandbox abre la red **solo para eso** y la cierra al
   terminar. Si el clonado falla, también la cierra.
+- **Traer uno privado** con tu cuenta de GitHub: el host clona con tu token y el sandbox
+  recibe el código **sin ninguna credencial**.
+- **Meter tu carpeta local** como paquete (sin montarla) y **sacar su trabajo** como archivo
+  para que tú lo apliques. Los `.env` y las claves nunca viajan.
+- **Empujar a `movilclaw/<tarea>` y abrir el PR**: nunca a `main`, y nunca fusionándolo solo.
 - **Trabajar en él** con las herramientas del agente: leer, buscar, escribir, editar,
   `git status`/`diff`/`stage`, commit y ejecutar programas.
 - **Sellar** el sandbox con una frase secreta tuya: lo guardado queda cifrado y **el
@@ -58,6 +63,10 @@ Pruebas de aislamiento **con Docker real**, no simuladas (`npm run test:isolatio
 | Clonado que falla | también deja la red cerrada |
 | Editar y commitear | el cambio se ve en `git status` y el commit lleva el mensaje |
 | Ruta `../../etc/passwd` | rechazada |
+| Empujar a `main` | rechazado con su motivo |
+| Token en el sandbox tras clonar un privado | **0 archivos** con credenciales |
+| El sandbox intenta empujar | `Could not resolve host` (sin red y sin token) |
+| El agente commitea | `a3c4331 docs: trabajo del agente desde MovilClaw` |
 
 Y el ciclo de vida completo, con Docker de verdad:
 
@@ -104,6 +113,10 @@ La regla que manda: **nunca se destruye trabajo que no se haya entregado antes.*
 | `web/index.html` | La PWA (la sirve `server/api.mjs`, sin proxy) |
 | `web/seal.mjs` | El cifrado: PBKDF2 + AES-GCM. **La clave nunca sale del navegador** |
 | `server/network.mjs` | La red por fases: qué destinos se abren y por qué |
+| `server/policy.mjs` | `main` es de solo lectura; las operaciones destructivas no existen |
+| `server/credentials.mjs` | Cuentas: el token se sella y **nunca** se devuelve |
+| `server/github.mjs` | Clonar y empujar desde el host, con el token fuera del sandbox |
+| `server/workspace.mjs` | Tu carpeta por paquete y su trabajo de vuelta, sin montar tu disco |
 | `server/grant.mjs` | El permiso firmado con vencimiento (HMAC + caducidad) |
 | `server/sealed.mjs` | Guarda ciphertext. No tiene, a propósito, ninguna función para descifrarlo |
 | `tests/` | Ciclo de vida, cifrado y aislamiento con Docker real |
@@ -136,11 +149,27 @@ Todas son `argv` fijos: eliges la herramienta y sus argumentos, nunca una cadena
 | `commit` | commit con mensaje |
 | `run` | ejecutar un programa (node, python, tests) con límite de tiempo y de salida |
 
+## Ramas: `main` nunca
+
+```
+main  ─────────────────────────────►  solo lectura, siempre
+  │
+  └─ movilclaw/<tarea>-<fecha>  ──►  commits  ──►  PR  ──►  tú fusionas
+```
+
+El prefijo `movilclaw/` es la **atribución honesta**: no puedo firmar un commit como Claude
+ni como Copilot, así que el nombre de la rama dice de dónde salió el trabajo. Y el PR se abre,
+no se fusiona: fusionar es tuyo.
+
+Ver [docs/CREDENCIALES.md](docs/CREDENCIALES.md): dónde vive cada credencial, por qué el
+sandbox no tiene ninguna, y las operaciones que **no existen** en el código.
+
 ## Qué NO hay todavía
 
-- **No abre PRs** con un token efímero: la estructura está, la llamada a GitHub no.
-- **No empuja cambios**: `git push` está fuera de la lista a propósito; eso necesita el
-  token efímero y su propia decisión.
+- **Device flow de GitHub**: implementado, pero necesita que registres una OAuth App
+  (`client_id`). Hoy se usa el token pegado, que funciona. No se inventa un `client_id`.
+- **UI del login de proveedor**: se apoya en el que tu app ya tiene (`models auth login`),
+  pero elegirlo desde MovilClaw está por hacer.
 - **No hay reinyección**: el archivo se descarga, pero un sandbox nuevo aún no lo monta.
 - **No hay app iOS.** El cliente es web. Ver [docs/ENTORNO.md](docs/ENTORNO.md): el runner
   de macOS puede compilar Swift, y `ISyCodeMovil` es la plantilla, pero eso es otra entrega.

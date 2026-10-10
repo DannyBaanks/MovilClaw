@@ -11,6 +11,8 @@ import { fileURLToPath } from "node:url";
 import { extname, join, normalize, resolve } from "node:path";
 import { OrchestratorError, createOrchestrator } from "./orchestrator.mjs";
 import { createSealedStore } from "./sealed.mjs";
+import { createCredentialStore } from "./credentials.mjs";
+import { open as openSealed, seal as sealBytes } from "../web/seal.mjs";
 import { issueGrant, verifyGrant } from "./grant.mjs";
 
 /**
@@ -102,7 +104,11 @@ function readRawBody(req, limit) {
   });
 }
 
-export function createApi(orch = createOrchestrator(), sealedStore = createSealedStore(process.env.MOVILCLAW_STATE ?? process.cwd())) {
+export function createApi(
+  orch = createOrchestrator(),
+  sealedStore = createSealedStore(process.env.MOVILCLAW_STATE ?? process.cwd()),
+  credentials = createCredentialStore({ seal: sealBytes, open: openSealed }),
+) {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const parts = url.pathname.split("/").filter(Boolean); // ["api","sandboxes","<id>","snapshot"]
@@ -171,6 +177,69 @@ export function createApi(orch = createOrchestrator(), sealedStore = createSeale
           });
           return res.end(bytes);
         }
+        /** Put a local folder into the sandbox, as a package. No mount. */
+        if (op === "folder" && req.method === "POST") {
+          const body = await readBody(req);
+          if (typeof body.directory !== "string" || !body.directory) {
+            return send(res, 400, { error: "falta el directorio" });
+          }
+          return send(res, 200, await orch.sendFolder(id, body.directory, { subPath: body.subPath }));
+        }
+        /** What would be sent, and what excluded, before sending anything. */
+        if (op === "folder" && req.method === "GET") {
+          const directory = url.searchParams.get("directory") ?? "";
+          if (!directory) return send(res, 400, { error: "falta el parametro directory" });
+          return send(res, 200, await orch.previewFolder(directory));
+        }
+        /** Take the sandbox's work out as an archive. The user decides where it lands. */
+        if (op === "work" && req.method === "GET") {
+          const archive = await orch.collectWork(id, { subPath: url.searchParams.get("subPath") ?? "app" });
+          res.writeHead(200, {
+            "content-type": "application/gzip",
+            "content-length": archive.length,
+            "cache-control": "no-store",
+            "content-disposition": `attachment; filename="${id}-trabajo.tar.gz"`,
+          });
+          return res.end(archive);
+        }
+        /** Accounts and credentials. The token travels in the body and is never echoed. */
+        if (op === "account" && req.method === "POST") {
+          const body = await readBody(req);
+          const stored = await credentials.put(body.id ?? "github", String(body.token ?? ""), {
+            scopes: Array.isArray(body.scopes) ? body.scopes : [],
+            expiresAt: body.expiresAt ?? null,
+            passphrase: body.passphrase ?? null,
+          });
+          return send(res, 201, stored);
+        }
+        if (op === "account" && req.method === "GET") {
+          return send(res, 200, { accounts: credentials.list() });
+        }
+        if (op === "account" && req.method === "DELETE") {
+          return send(res, 200, { forgotten: credentials.forget(id) });
+        }
+        /** Clone with the host's credential. Private repositories work; the sandbox gets no token. */
+        if (op === "repo-private" && req.method === "POST") {
+          const body = await readBody(req);
+          const usable = credentials.usable(body.accountId ?? "github");
+          if (!usable.ok) return send(res, 409, { error: usable.reason });
+          const token = await credentials.unlock(body.accountId ?? "github", body.passphrase);
+          const result = await orch.cloneWithCredential(id, String(body.url ?? ""), token);
+          return send(res, 201, result);
+        }
+        /** Push the work to movilclaw/<task> and open a PR. Never to main, never merged. */
+        if (op === "pr" && req.method === "POST") {
+          const body = await readBody(req);
+          const usable = credentials.usable(body.accountId ?? "github");
+          if (!usable.ok) return send(res, 409, { error: usable.reason });
+          const token = await credentials.unlock(body.accountId ?? "github", body.passphrase);
+          const result = await orch.pushAndOpenPr(id, {
+            task: body.task, title: body.title, body: body.body,
+            baseBranch: body.baseBranch ?? "main", token,
+          });
+          return send(res, 201, result);
+        }
+
         /** What the sandbox may reach right now. */
         if (op === "network" && req.method === "GET") {
           return send(res, 200, await orch.network(id));

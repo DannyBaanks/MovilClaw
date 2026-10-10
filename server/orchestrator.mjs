@@ -10,11 +10,19 @@
  * and a fake clock, so expiry is proven without waiting 30 minutes.
  */
 import { createHash, randomBytes } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { rm } from "node:fs/promises";
+
+const run = promisify(execFile);
 import {
   PHASES, advance, canDestroy, describe, markSnapshotDelivered, newLifecycle, remainingMs, touch,
 } from "./lifecycle.mjs";
 import { DEFAULT_SPEC, realDocker } from "./docker.mjs";
 import { PHASES as NET_PHASES, assertHostAllowed, createNetwork, describePhase } from "./network.mjs";
+import { branchFor } from "./policy.mjs";
+import { packWorkspace, planTransfer } from "./workspace.mjs";
+import { cloneOnHost, pushBranchAndOpenPr } from "./github.mjs";
 
 export class OrchestratorError extends Error {}
 
@@ -166,6 +174,135 @@ export function createOrchestrator({
       const next = { ...sandbox.state, phase: PHASES.DESTROYED, phaseChangedAt: now() };
       sandboxes.set(id, { ...sandbox, state: next });
       return { id, phase: PHASES.DESTROYED };
+    },
+
+    /**
+     * Put a local folder INTO the sandbox as a package.
+     *
+     * The host packs it, the sandbox unpacks it: no bind mount, so the sandbox never has a
+     * path into the machine. Secrets are excluded by `packWorkspace`, and the report says
+     * what was left out.
+     */
+    async sendFolder(id, directory, { subPath = "app" } = {}) {
+      const sandbox = requireSandbox(id);
+      const plan = await planTransfer(directory);
+      const archive = await packWorkspace(directory);
+      if (!archive?.length) throw new OrchestratorError("no se pudo empaquetar la carpeta (esta vacia?)");
+
+      // The archive is piped into the container by the caller of docker; here we do it
+      // through a base64 chunk so no bind mount is ever needed.
+      const b64 = Buffer.from(archive).toString("base64");
+      const target = `/work/${String(subPath).replace(/[^a-zA-Z0-9._-]/g, "")}`;
+      const result = await docker.runCommand(sandbox.name, [
+        "sh", "-c",
+        `mkdir -p ${target} && printf '%s' '${b64}' | base64 -d | tar -xzf - -C ${target}`,
+      ], { timeoutMs: 300_000 });
+      if (result.code !== 0) {
+        throw new OrchestratorError(`no se pudo meter la carpeta: ${result.err.slice(0, 200)}`);
+      }
+      const listing = await docker.runCommand(sandbox.name, ["ls", "-1", target]);
+      return {
+        into: target,
+        files: plan.files,
+        packedBytes: plan.packedBytes,
+        excluded: plan.excludedExamples,
+        note: plan.note,
+        contents: listing.out.split("\n").filter(Boolean).slice(0, 40),
+      };
+    },
+
+    /** What would be sent, and what would be excluded, before sending anything. */
+    async previewFolder(directory) {
+      return planTransfer(directory);
+    },
+
+    /**
+     * Take the sandbox's work OUT as an archive.
+     *
+     * The caller saves it; nothing is written into the user's repository automatically.
+     */
+    async collectWork(id, { subPath = "app" } = {}) {
+      const sandbox = requireSandbox(id);
+      const target = `/work/${String(subPath).replace(/[^a-zA-Z0-9._-]/g, "")}`;
+      const b64 = await docker.runCommand(sandbox.name, ["sh", "-c", `tar -czf - -C ${target} . | base64 -w0`], {
+        timeoutMs: 300_000,
+      });
+      if (b64.code !== 0 || !b64.out.trim()) {
+        throw new OrchestratorError("no hay nada que recoger en esa carpeta");
+      }
+      return Buffer.from(b64.out.trim(), "base64");
+    },
+
+    /**
+     * Clone a repository using the HOST's credentials, then hand the code to the sandbox.
+     *
+     * With a token this works for private repositories too. Either way the sandbox receives
+     * files with no credentials in them: the host clones, strips the remote, and only then
+     * does the archive travel.
+     */
+    async cloneWithCredential(id, remoteUrl, token) {
+      await sweep();
+      const sandbox = requireSandbox(id);
+      const cloned = await cloneOnHost({ remoteUrl, token });
+      try {
+        const archive = await packWorkspace(cloned.dir);
+        const b64 = Buffer.from(archive).toString("base64");
+        const result = await docker.runCommand(sandbox.name, [
+          "sh", "-c",
+          `rm -rf /work/app && mkdir -p /work/app && printf '%s' '${b64}' | base64 -d | tar -xzf - -C /work/app`,
+        ], { timeoutMs: 300_000 });
+        if (result.code !== 0) throw new OrchestratorError(`no se pudo entregar el codigo: ${result.err.slice(0, 200)}`);
+        sandbox.repo = `${cloned.owner}/${cloned.repo}`;
+        sandbox.repoCommit = cloned.commit;
+        // Prove it: the sandbox must not hold the token anywhere.
+        const leak = await docker.runCommand(sandbox.name, [
+          "sh", "-c",
+          `grep -rlE 'ghp_|gho_|github_pat_|x-access-token|Authorization' /work 2>/dev/null | head -5`,
+        ]);
+        return {
+          repo: sandbox.repo,
+          commit: cloned.commit,
+          branch: cloned.branch,
+          credentialsInSandbox: leak.out.trim() ? leak.out.trim().split("\n") : [],
+        };
+      } finally {
+        // The host's temporary clone never outlives the operation.
+        await rm(cloned.dir, { recursive: true, force: true }).catch(() => {});
+      }
+    },
+
+    /**
+     * Push the sandbox's work to `movilclaw/<task>` and open a pull request.
+     *
+     * The host does both with its own credential, and the branch rule is enforced before a
+     * single byte leaves the machine: `main` is not a target.
+     */
+    async pushAndOpenPr(id, { task = "", title = "", body = "", baseBranch = "main", token } = {}) {
+      await sweep();
+      const sandbox = requireSandbox(id);
+      const branch = branchFor(task || sandbox.repo || "cambios");
+
+      // Bring the work out of the sandbox onto the host, into a fresh clone with the remote.
+      const work = await cloneOnHost({ remoteUrl: `https://github.com/${sandbox.repo}`, token });
+      try {
+        const archive = await this.collectWork(id);
+        await run("tar", ["-xzf", "-", "-C", work.dir], {
+          input: archive,
+          timeoutMs: 300_000,
+          maxBuffer: 256 * 1024 * 1024,
+        });
+        const result = await pushBranchAndOpenPr({
+          workDir: work.dir,
+          token,
+          branch,
+          baseBranch,
+          title: title || `movilclaw: ${task || "cambios del agente"}`,
+          body,
+        });
+        return { ...result, commit: sandbox.repoCommit ?? null };
+      } finally {
+        await rm(work.dir, { recursive: true, force: true }).catch(() => {});
+      }
     },
 
     /** Used by the isolation tests to run a command inside a sandbox. */
@@ -382,6 +519,9 @@ function safePath(value, allowRoot = false) {
   }
   return path.replace(/^\.\//, "");
 }
+
+/** Exported for the policy tests: the path rule must be testable on its own. */
+export const safePathForTests = safePath;
 
 /** A token that only ever unlocks one repo, and expires with the sandbox. */
 function issueToken(id, repo, expiresAt) {
