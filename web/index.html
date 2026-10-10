@@ -3,89 +3,142 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#120d22">
+<meta name="theme-color" content="#0d0919">
+<meta name="description" content="Sandboxes kamikaze de AutoClaw en el bolsillo.">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <title>MovilClaw</title>
 <style>
-  :root { color-scheme: dark; --bg:#120d22; --card:#1e1638; --card2:#251b45; --ink:#f2eefc; --muted:#a99fc4;
-          --coral:#ce3434; --cian:#00dec6; --line:#332a55; --ok:#8ff0c4; --warn:#f0dc8f; --bad:#f09aa8; }
+  :root { color-scheme: dark; --bg:#0d0919; --bg2:#120d22; --card:#1c1436; --card-top:#241a45; --ink:#f2eefc;
+          --muted:#a297c2; --coral:#e03e3e; --coral2:#b528c0; --cian:#00dec6; --line:#342a5c;
+          --ok:#8ff0c4; --warn:#f0dc8f; --bad:#f09aa8; }
   * { box-sizing: border-box; }
   html { scrollbar-color: var(--line) var(--bg); }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui,-apple-system,sans-serif;
-         padding:0 16px calc(28px + env(safe-area-inset-bottom)); max-width:640px; margin-inline:auto; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 system-ui,-apple-system,sans-serif;
+         padding:0 16px calc(32px + env(safe-area-inset-bottom)); max-width:660px; margin-inline:auto;
+         min-height:100vh; position:relative; }
+  /* two soft glows behind everything: the page stops feeling flat */
+  body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(600px 320px at 85% -5%, rgba(181,40,192,.22), transparent 70%),
+      radial-gradient(520px 300px at 0% 12%, rgba(0,222,198,.10), transparent 70%),
+      radial-gradient(700px 500px at 50% 110%, rgba(64,32,120,.35), transparent 70%); }
 
-  header { position:sticky; top:0; z-index:5; background:linear-gradient(var(--bg) 78%, transparent);
-           padding:14px 0 10px; display:flex; align-items:baseline; gap:10px; }
-  header .brand { font-size:1.25rem; font-weight:700; letter-spacing:.01em; }
-  header .brand b { color:var(--cian); }
-  header .conn { margin-left:auto; font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  /* ---------------------------------------------------------------- header */
+  header { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:12px;
+           padding:14px 2px 12px; margin-bottom:2px;
+           background:linear-gradient(var(--bg) 82%, transparent); backdrop-filter:blur(6px); }
+  .logo { width:38px; height:38px; border-radius:11px; flex:none; display:grid; place-items:center;
+          background:linear-gradient(145deg,#2a1e52,#160f2e); border:1px solid var(--line);
+          box-shadow:0 4px 18px rgba(0,222,198,.12); }
+  .logo svg { width:22px; height:22px; }
+  .wordmark { font-size:1.3rem; font-weight:800; letter-spacing:.01em; line-height:1.1; }
+  .wordmark span { background:linear-gradient(90deg,var(--cian),#7ef); -webkit-background-clip:text;
+                   background-clip:text; color:transparent; }
+  .wordmark small { display:block; font-size:.68rem; font-weight:500; color:var(--muted); letter-spacing:.14em;
+                    text-transform:uppercase; }
+  .conn { margin-left:auto; font-size:.78rem; color:var(--muted); display:flex; align-items:center; gap:6px;
+          background:rgba(28,20,54,.7); border:1px solid var(--line); padding:5px 10px; border-radius:999px; }
   .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none; }
-  .dot.on { background:var(--ok); box-shadow:0 0 6px var(--ok); }
-  .dot.off { background:var(--bad); box-shadow:0 0 6px var(--bad); }
+  .dot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+  .dot.off { background:var(--bad); box-shadow:0 0 8px var(--bad); }
 
-  h2 { font-size:.85rem; margin:26px 0 8px; color:var(--muted); font-weight:600; text-transform:uppercase;
-       letter-spacing:.06em; display:flex; align-items:center; gap:8px; }
-  h2 .n { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px;
-          border-radius:50%; background:var(--card2); border:1px solid var(--line); color:var(--cian);
-          font-size:.7rem; font-weight:700; }
-  .sub { color:var(--muted); font-size:.88rem; margin:0 0 8px; }
+  .hero { margin:10px 2px 4px; }
+  .hero p { color:var(--muted); margin:0; font-size:.92rem; }
+  .hero b { color:var(--ink); }
 
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:10px 0; }
+  /* ---------------------------------------------------------------- type */
+  h2 { font-size:.82rem; margin:30px 0 10px; color:var(--muted); font-weight:700; text-transform:uppercase;
+       letter-spacing:.09em; display:flex; align-items:center; gap:10px; }
+  h2 .n { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
+          border-radius:7px; background:linear-gradient(145deg,#31245e,#1b1338); border:1px solid var(--line);
+          color:var(--cian); font-size:.72rem; font-weight:800; box-shadow:0 2px 8px rgba(0,0,0,.35); }
+  h2 .tail { flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent); }
+
+  /* ---------------------------------------------------------------- cards */
+  .card { background:linear-gradient(180deg,var(--card-top),var(--card)); border:1px solid var(--line);
+          border-radius:16px; padding:16px; margin:10px 0;
+          box-shadow:0 1px 0 rgba(255,255,255,.045) inset, 0 10px 28px rgba(5,2,14,.45); }
   .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .row + .row { margin-top:10px; }
 
-  button { font:inherit; border:0; border-radius:10px; padding:10px 14px; background:#2b2250; color:var(--ink);
-           cursor:pointer; min-height:44px; transition:transform .05s, filter .15s; }
+  /* ---------------------------------------------------------------- controls */
+  button { font:inherit; border:0; border-radius:11px; padding:10px 15px; color:var(--ink);
+           background:linear-gradient(180deg,#332862,#251c4b); border:1px solid #3d3170;
+           cursor:pointer; min-height:44px; transition:transform .05s, filter .15s, box-shadow .15s; }
+  button:hover { filter:brightness(1.15); }
   button:active { transform:scale(.97); }
-  button.primary { background:var(--coral); color:#fff; font-weight:600; }
+  button.primary { background:linear-gradient(135deg,var(--coral),var(--coral2)); border:0; color:#fff;
+                   font-weight:700; box-shadow:0 4px 18px rgba(224,62,62,.35); }
+  button.cian { background:transparent; border:1px solid var(--cian); color:var(--cian); font-weight:600; }
   button.ghost { background:transparent; border:1px solid var(--line); }
-  button.small { min-height:34px; padding:6px 10px; font-size:.82rem; border-radius:8px; }
+  button.small { min-height:36px; padding:7px 11px; font-size:.82rem; border-radius:9px; }
   button:disabled { opacity:.45; cursor:not-allowed; }
   :is(button, input, a, summary):focus-visible { outline:2px solid var(--cian); outline-offset:2px; }
 
-  .field { flex:1; min-width:200px; background:#0d0a1a; border:1px solid var(--line); border-radius:10px;
+  .field { flex:1; min-width:200px; background:#0e0a1e; border:1px solid var(--line); border-radius:11px;
            padding:11px 12px; color:var(--ink); font:inherit; min-height:44px; }
-  .field::placeholder { color:#6f6494; }
-  .field:hover { border-color:#4a3d7a; }
+  .field::placeholder { color:#6a5f92; }
+  .field:hover, .field:focus { border-color:#4d3f85; }
   input[type=file].field { padding:9px; }
-  input[type=file].field::file-selector-button { background:#2b2250; color:var(--ink); border:0;
-                 border-radius:8px; padding:8px 12px; margin-right:10px; font:inherit; min-height:34px; cursor:pointer; }
-  .check { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:.88rem; accent-color:var(--coral); }
-  .check input { width:18px; height:18px; }
+  input[type=file].field::file-selector-button { background:#2b2250; color:var(--ink); border:1px solid #3d3170;
+           border-radius:9px; padding:8px 12px; margin-right:10px; font:inherit; min-height:34px; cursor:pointer; }
+  .check { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:.88rem; cursor:pointer; }
+  .check input { width:18px; height:18px; accent-color:var(--coral); }
 
+  /* ---------------------------------------------------------------- pills & sandbox cards */
   .pill { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:999px;
-          font-size:.76rem; font-weight:600; }
+          font-size:.74rem; font-weight:700; letter-spacing:.03em; }
   .pill::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
-  .pill.active { background:#1d4d3a; color:var(--ok); }
-  .pill.suspended { background:#4d3f1d; color:var(--warn); }
-  .pill.destroyed { background:#4a1f28; color:var(--bad); }
+  .pill.active { background:#123c2c; color:var(--ok); }
+  .pill.suspended { background:#3f3416; color:var(--warn); }
+  .pill.destroyed { background:#3d1720; color:var(--bad); }
+  .tag { display:inline-flex; align-items:center; gap:5px; padding:1px 8px; border-radius:6px; font-size:.7rem;
+         font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+  .tag.private { background:#3f3416; color:var(--warn); }
+  .tag.archived { background:#3d1720; color:var(--bad); }
+  .tag.pub { background:#123c2c; color:var(--ok); }
 
-  .sbx { position:relative; cursor:pointer; }
-  .sbx.sel { border-color:var(--cian); box-shadow:0 0 0 1px var(--cian) inset; }
+  .sbx { position:relative; cursor:pointer; transition:border-color .15s, transform .1s; }
+  .sbx:hover { transform:translateY(-1px); }
+  .sbx.sel { border-color:var(--cian); box-shadow:0 0 0 1px var(--cian) inset, 0 10px 28px rgba(0,222,198,.10); }
   .sbx.sel::after { content:"en uso"; position:absolute; top:-8px; right:12px; background:var(--cian);
-                    color:#08201d; font-size:.68rem; font-weight:800; letter-spacing:.05em;
-                    padding:1px 8px; border-radius:999px; }
-  .sbx .head { display:flex; align-items:center; gap:8px; }
+                    color:#08201d; font-size:.66rem; font-weight:900; letter-spacing:.07em;
+                    padding:2px 9px; border-radius:999px; box-shadow:0 2px 10px rgba(0,222,198,.5); }
+  .sbx .head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .sbx .head code { font-size:.82rem; }
   .sbx .head .clock { margin-left:auto; font-variant-numeric:tabular-nums; color:var(--muted); font-size:.82rem; }
 
+  /* ---------------------------------------------------------------- repo picker */
+  .repos { max-height:340px; overflow:auto; margin-top:10px; border:1px solid var(--line); border-radius:12px;
+           background:#0e0a1e; }
+  .repo { display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #221a40;
+          transition:background .12s; }
+  .repo:last-child { border-bottom:0; }
+  .repo:hover { background:#1a1334; }
+  .repo .nm { font-weight:600; font-size:.9rem; }
+  .repo .nm i { color:var(--muted); font-style:normal; font-weight:400; }
+  .repo .meta { margin-left:auto; text-align:right; color:var(--muted); font-size:.74rem; white-space:nowrap; }
+  .repo svg { flex:none; opacity:.7; }
+
+  /* ---------------------------------------------------------------- misc */
   .muted { color:var(--muted); font-size:.88rem; }
-  code { background:#0d0a1a; padding:1px 5px; border-radius:5px; font-size:.86rem; }
-  pre { background:#0d0a1a; padding:10px; border-radius:8px; overflow-x:auto; font-size:.8rem; margin:8px 0 0;
-        white-space:pre-wrap; word-break:break-word; }
+  code { background:#0e0a1e; padding:1px 6px; border-radius:6px; font-size:.86rem; border:1px solid #221a40; }
+  pre { background:#0e0a1e; padding:12px; border-radius:10px; overflow-x:auto; font-size:.8rem; margin:8px 0 0;
+        white-space:pre-wrap; word-break:break-word; border:1px solid #221a40; }
   a { color:var(--cian); }
   a.ghost { display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:10px;
             padding:6px 12px; min-height:34px; text-decoration:none; color:var(--ink); background:transparent;
             font-size:.88rem; }
 
-  .code-chip { display:flex; align-items:center; gap:10px; margin:6px 0 0; }
-  .code-chip b { font-size:1.45rem; letter-spacing:.14em; font-variant-numeric:tabular-nums; }
+  .code-chip { display:flex; align-items:center; gap:12px; margin:8px 0 0; padding:10px 14px;
+               background:#0e0a1e; border:1px dashed var(--cian); border-radius:12px; width:max-content; }
+  .code-chip b { font-size:1.5rem; letter-spacing:.16em; font-variant-numeric:tabular-nums; }
 
   #toast { position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom)); transform:translateX(-50%)
-           translateY(8px); background:#2b2250; border:1px solid var(--line); padding:10px 16px;
-           border-radius:12px; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; max-width:90vw;
-           font-size:.9rem; }
+           translateY(8px); background:#241a45; border:1px solid var(--line); padding:11px 17px;
+           border-radius:13px; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; max-width:90vw;
+           font-size:.9rem; box-shadow:0 10px 30px rgba(5,2,14,.6); z-index:20; }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   #toast.ok { border-color:#1d6b52; background:#123527; color:var(--ok); }
   #toast.err { border-color:#6b1d2a; background:#351218; color:var(--bad); }
@@ -95,12 +148,20 @@
 </head>
 <body>
   <header>
-    <span class="brand">Movil<b>Claw</b></span>
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#00dec6" stroke-width="2.2" stroke-linecap="round">
+        <path d="M6.5 3.5 C5 8, 5.5 13, 8.5 18"/><path d="M12 2.8 C11 8, 11.3 13.5, 13.2 19"/><path d="M17.5 3.5 C16.8 8, 16.3 13, 17.2 18"/>
+      </svg>
+    </span>
+    <span class="wordmark">Movil<span>Claw</span><small>sandboxes kamikaze</small></span>
     <span class="conn"><span class="dot" id="connDot"></span><span id="conn">comprobando…</span></span>
   </header>
-  <p class="sub">Sandboxes que nacen, trabajan, se guardan y se destruyen solos.</p>
 
-  <h2><span class="n">1</span> Tus sandboxes</h2>
+  <div class="hero">
+    <p>Nacen, trabajan, <b>se guardan</b> y se destruyen solos. Sin red, sin tu disco, sin root.</p>
+  </div>
+
+  <h2><span class="n">1</span> Tus sandboxes <span class="tail"></span></h2>
   <div class="card">
     <div class="row">
       <span class="muted">Caduca tras</span>
@@ -114,14 +175,15 @@
   </div>
   <div id="list"><p class="muted">Cargando…</p></div>
 
-  <h2><span class="n">2</span> Tu cuenta de GitHub</h2>
+  <h2><span class="n">2</span> Tu cuenta de GitHub <span class="tail"></span></h2>
   <div class="card">
     <p class="muted" style="margin-top:0">
-      Con tu cuenta puedes traer repos <b>privados</b> y abrir PRs. El token se guarda en el
-      servidor y <b>nunca entra al sandbox</b>.
+      Con tu cuenta puedes traer repos <b>privados</b>, ver tu lista y abrir PRs. El token se
+      guarda en el servidor y <b>nunca entra al sandbox</b>.
     </p>
     <div class="row">
       <button class="primary" id="ghLogin">Iniciar sesión con GitHub</button>
+      <button class="ghost" id="ghLogout" style="display:none">Desconectar</button>
       <span class="muted" id="ghState"></span>
     </div>
     <div id="ghDevice" style="display:none">
@@ -143,13 +205,18 @@
     <div id="accountOut"></div>
   </div>
 
-  <h2><span class="n">3</span> Tu repositorio</h2>
+  <h2><span class="n">3</span> Tu repositorio <span class="tail"></span></h2>
   <div class="card">
     <p class="muted" style="margin-top:0">
-      Pega la URL del repo. Sin cuenta, solo funciona con repos <b>públicos</b>; con tu cuenta,
-      también con los <b>privados</b>. El sandbox abre la red solo para traerlo y la cierra al terminar.
+      Elige uno de tus repos o pega la URL. Sin cuenta, solo funciona con repos <b>públicos</b>.
+      El sandbox abre la red solo para traerlo y la cierra al terminar.
     </p>
     <div class="row">
+      <button class="cian" id="myRepos">Mis repos</button>
+      <input id="repoSearch" class="field" placeholder="filtrar por nombre…" autocomplete="off" style="display:none">
+    </div>
+    <div id="repoList"></div>
+    <div class="row" style="margin-top:10px">
       <input id="repoUrl" class="field" placeholder="https://github.com/usuario/repositorio" autocomplete="off">
       <button class="primary" id="cloneBtn">Traer repo</button>
     </div>
@@ -159,7 +226,7 @@
     <div id="repoOut"></div>
   </div>
 
-  <h2><span class="n">4</span> Consola</h2>
+  <h2><span class="n">4</span> Consola <span class="tail"></span></h2>
   <div class="card">
     <div class="row">
       <input id="cmd" class="field" placeholder="un comando: git status, ls, node --test…" autocomplete="off">
@@ -173,7 +240,7 @@
     <pre id="cmdOut" class="muted">La salida aparecerá aquí.</pre>
   </div>
 
-  <h2><span class="n">5</span> Candado</h2>
+  <h2><span class="n">5</span> Candado <span class="tail"></span></h2>
   <div class="card">
     <p class="muted" style="margin-top:0">
       Escribe una frase secreta. Con ella se cifra el <b>trabajo real</b> del sandbox, y
@@ -192,7 +259,7 @@
     <div id="sealOut"></div>
   </div>
 
-  <h2><span class="n">6</span> Reanudar un trabajo</h2>
+  <h2><span class="n">6</span> Reanudar un trabajo <span class="tail"></span></h2>
   <div class="card">
     <p class="muted" style="margin-top:0">
       Elige el archivo que descargaste: el sello <code>.sealed.json</code> o el
@@ -207,7 +274,7 @@
     <div id="injectOut"></div>
   </div>
 
-  <h2><span class="n">7</span> Publicar tu trabajo</h2>
+  <h2><span class="n">7</span> Publicar tu trabajo <span class="tail"></span></h2>
   <div class="card">
     <p class="muted" style="margin-top:0">
       Empuja los cambios a una rama <code>movilclaw/…</code> y abre un PR. <b>Nunca a main</b>,
@@ -232,12 +299,13 @@
 const API = "";
 let ttl = 120;
 let selected = null; // the sandbox every operation targets; the person picks it
+let reposCache = []; // the picker's data, so filtering costs no requests
 
 const $ = (s) => document.querySelector(s);
 function toast(msg, kind) {
   const t = $("#toast"); t.textContent = msg;
   t.className = "show" + (kind ? " " + kind : "");
-  clearTimeout(toast._t); toast._t = setTimeout(() => { t.className = ""; }, 2600);
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.className = ""; }, 2800);
 }
 async function call(path, options) {
   const res = await fetch(API + path, options);
@@ -251,12 +319,20 @@ function fmt(ms) {
   if (m < 60) return m + " min";
   return Math.floor(m / 60) + " h " + (m % 60) + " min";
 }
+function hace(iso) {
+  if (!iso) return "";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 3600) return Math.max(1, Math.round(s / 60)) + " min";
+  if (s < 86400) return Math.round(s / 3600) + " h";
+  if (s < 86400 * 31) return Math.round(s / 86400) + " d";
+  return Math.round(s / 86400 / 30.4) + " meses";
+}
 function esc(s) { return String(s).replace(/[<>&"]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;", '"':"&quot;" }[c])); }
 
 async function health() {
   try {
     await call("/api/health");
-    $("#conn").textContent = "orquestador conectado";
+    $("#conn").textContent = "conectado";
     $("#connDot").className = "dot on";
   } catch {
     $("#conn").textContent = "sin orquestador";
@@ -402,7 +478,7 @@ document.querySelector("#sealNow").addEventListener("click", async (ev) => {
     if (!res.ok) throw new Error(manifest.error || "no se pudo sellar");
     document.querySelector("#sealOut").innerHTML =
       '<pre>' + esc(JSON.stringify({ sellado: inspect(blob), servidorDiceQueNoPuedeLeerlo: manifest.hostCanRead === false }, null, 2)) + '</pre>' +
-      '<div class="row"><a class="ghost small" style="text-decoration:none" href="' + API + '/api/sandboxes/' + id + '/seal" download>Descargar el sello</a>' +
+      '<div class="row"><a class="ghost" style="text-decoration:none" href="' + API + '/api/sandboxes/' + id + '/seal" download>Descargar el sello</a>' +
       '<span class="muted">guárdalo en el teléfono: es lo que reinyectas para continuar</span></div>';
     toast("Sellado. El servidor guarda ciphertext.", "ok");
   } catch (e) { toast(e.message, "err"); }
@@ -461,16 +537,37 @@ document.querySelector("#injectBtn").addEventListener("click", async (ev) => {
   finally { ev.target.disabled = false; }
 });
 
-// ------------------------------------------------------------------ repo y consola
-async function tool(name, args) {
-  const id = await activeId();
-  if (!id) throw new Error("sin sandbox elegido");
-  const r = await call("/api/sandboxes/" + id + "/tool", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, args }),
-  });
-  return r.result;
+// ------------------------------------------------------------------ cuenta
+/** Lo que la pagina sabe de la cuenta: se pinta desde /api/account, sin tokens de por medio. */
+async function refreshAccount() {
+  try {
+    const { accounts } = await call("/api/account");
+    const gh = accounts.find((a) => a.id === "github");
+    if (gh) {
+      $("#ghState").innerHTML = '<span class="pill active">conectada</span> <code>' + esc(gh.fingerprint) + "</code>" +
+        (gh.sealed ? ' <span class="tag private">sellada</span>' : "");
+      $("#ghLogout").style.display = "";
+    } else {
+      $("#ghState").textContent = "";
+      $("#ghLogout").style.display = "none";
+    }
+    return gh || null;
+  } catch { return null; }
 }
+
+document.querySelector("#ghLogout").addEventListener("click", async (ev) => {
+  ev.target.disabled = true;
+  try {
+    await call("/api/account", { method: "DELETE" });
+    reposCache = [];
+    $("#repoList").innerHTML = "";
+    $("#repoSearch").style.display = "none";
+    $("#accountOut").innerHTML = "";
+    await refreshAccount();
+    toast("Cuenta desconectada", "ok");
+  } catch (e) { toast(e.message, "err"); }
+  finally { ev.target.disabled = false; }
+});
 
 /**
  * Inicio de sesion con GitHub por device flow.
@@ -505,9 +602,9 @@ document.querySelector("#ghLogin").addEventListener("click", async (ev) => {
       body: JSON.stringify({ userCode: pending.userCode, id: "github" }),
     });
     box.style.display = "none";
-    state.textContent = "conectado";
     document.querySelector("#accountOut").innerHTML =
       '<pre>' + esc("cuenta conectada por GitHub: " + JSON.stringify(done, null, 2)) + "</pre>";
+    await refreshAccount();
     toast("Cuenta conectada con " + done.fingerprint, "ok");
   } catch (e) {
     state.textContent = "";
@@ -534,10 +631,10 @@ document.querySelector("#saveToken").addEventListener("click", async (ev) => {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: "github", token, scopes: ["repo", "read:org"] }),
     });
-    // La respuesta trae tipo, huella y scopes. Jamas el token.
     document.querySelector("#accountOut").innerHTML =
       '<pre>' + esc("cuenta guardada\n" + JSON.stringify(r, null, 2)) + "</pre>";
     document.querySelector("#ghToken").value = "";
+    await refreshAccount();
     toast("Cuenta guardada", "ok");
   } catch (e) { toast(e.message, "err"); }
   finally { ev.target.disabled = false; }
@@ -547,22 +644,71 @@ document.querySelector("#askPass").addEventListener("change", (ev) => {
   document.querySelector("#passForPush").style.display = ev.target.checked ? "" : "none";
 });
 
-document.querySelector("#cloneBtn").addEventListener("click", async (ev) => {
+// ------------------------------------------------------------------ repositorio
+const LOCK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f0dc8f" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const GLOBE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8ff0c4" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg>';
+
+function renderRepos(filter = "") {
+  const q = filter.trim().toLowerCase();
+  const list = reposCache.filter((r) => !q || r.full_name.toLowerCase().includes(q) || (r.description ?? "").toLowerCase().includes(q));
+  const box = $("#repoList");
+  if (!list.length) { box.innerHTML = '<p class="muted" style="margin:8px 0 0">Ninguno coincide.</p>'; return; }
+  box.innerHTML = '<div class="repos">' + list.map((r) => `
+    <div class="repo" data-repo="${esc(r.full_name)}" role="button" tabindex="0">
+      ${r.private ? LOCK : GLOBE}
+      <span class="nm"><i>${esc(r.full_name.split("/")[0])}/</i>${esc(r.full_name.split("/")[1])}</span>
+      <span class="meta">${r.language ? esc(r.language) + " · " : ""}${esc(hace(r.pushed_at))}</span>
+    </div>`).join("") + "</div>";
+}
+
+document.querySelector("#myRepos").addEventListener("click", async (ev) => {
+  ev.target.disabled = true;
+  try {
+    const gh = await refreshAccount();
+    if (!gh) { toast("Conecta primero tu cuenta de GitHub", "err"); return; }
+    const r = await call("/api/repos", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accountId: "github", passphrase: gh.sealed ? $("#phrase").value : null }),
+    });
+    reposCache = r.repos;
+    $("#repoSearch").style.display = "";
+    $("#repoSearch").value = "";
+    renderRepos();
+    toast(r.count + " repos de @" + r.login, "ok");
+  } catch (e) { toast(e.message, "err"); }
+  finally { ev.target.disabled = false; }
+});
+
+document.querySelector("#repoSearch").addEventListener("input", (ev) => renderRepos(ev.target.value));
+
+// Elegir un repo de la lista: rellena la URL, marca la cuenta y lo trae.
+document.addEventListener("click", async (ev) => {
+  const item = ev.target.closest?.("[data-repo]");
+  if (!item) return;
+  $("#repoUrl").value = "https://github.com/" + item.dataset.repo;
+  $("#useAccount").checked = true; // si aparece en SU lista, es suyo: el token lo cubre
+  await cloneRepo();
+});
+document.addEventListener("keydown", async (ev) => {
+  if (ev.key === "Enter" && ev.target.matches?.("[data-repo]")) ev.target.click();
+});
+
+async function cloneRepo() {
   const id = await activeId();
   if (!id) return;
   const url = document.querySelector("#repoUrl").value.trim();
   if (!url) { toast("Pega la URL del repositorio", "err"); return; }
   const withAccount = document.querySelector("#useAccount").checked;
-  ev.target.disabled = true;
   const out = document.querySelector("#repoOut");
   out.innerHTML = '<p class="muted">' + (withAccount
     ? "Clonando en el servidor con tu cuenta, y entregando el código sin credenciales…"
     : "Abriendo la red solo para traerlo…") + "</p>";
   try {
     if (withAccount) {
+      const gh = await refreshAccount();
       const r = await call("/api/sandboxes/" + id + "/repo-private", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ accountId: "github", url }),
+        body: JSON.stringify({ accountId: "github", url, passphrase: gh?.sealed ? $("#phrase").value : null }),
       });
       out.innerHTML = '<pre>' + esc([
         "traido: " + r.repo,
@@ -585,7 +731,12 @@ document.querySelector("#cloneBtn").addEventListener("click", async (ev) => {
     await render();
   } catch (e) {
     out.innerHTML = '<p class="muted">' + esc(e.message) + "</p>";
-  } finally { ev.target.disabled = false; }
+  }
+}
+
+document.querySelector("#cloneBtn").addEventListener("click", async (ev) => {
+  ev.target.disabled = true;
+  try { await cloneRepo(); } finally { ev.target.disabled = false; }
 });
 
 /** Empujar a movilclaw/… y abrir el PR. La rama main no es un destino valido. */
@@ -616,6 +767,17 @@ document.querySelector("#pushPr").addEventListener("click", async (ev) => {
   } finally { ev.target.disabled = false; }
 });
 
+// ------------------------------------------------------------------ consola
+async function tool(name, args) {
+  const id = await activeId();
+  if (!id) throw new Error("sin sandbox elegido");
+  const r = await call("/api/sandboxes/" + id + "/tool", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, args }),
+  });
+  return r.result;
+}
+
 async function runArgv(argv) {
   const out = document.querySelector("#cmdOut");
   out.textContent = "$ " + argv.join(" ") + "\n…";
@@ -643,7 +805,7 @@ document.addEventListener("click", (ev) => {
 
 document.querySelector('.ttl[data-min="120"]').classList.add("primary");
 
-health(); render(); setInterval(() => { render(); health(); }, 15000);
+health(); render(); refreshAccount(); setInterval(() => { render(); health(); }, 15000);
 </script>
 </body>
 </html>

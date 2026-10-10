@@ -68,6 +68,41 @@ export async function whoami(token) {
 }
 
 /**
+ * The account's repositories, for the picker in the UI.
+ *
+ * Read-only, and only the safe fields come back: names, dates and flags. The token used
+ * here never leaves this process — the reply is what the browser sees, never the means.
+ * `affiliation=owner,collaborator` keeps the list to what the person actually owns or
+ * helps with, instead of every organization repository they can browse.
+ */
+export async function listRepos(token) {
+  const { stdout } = await run("curl", [
+    "-s", "--max-time", "20",
+    "-H", `Authorization: Bearer ${token}`,
+    "-H", "Accept: application/vnd.github+json",
+    "https://api.github.com/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator",
+  ]);
+  let data;
+  try {
+    data = JSON.parse(stdout);
+  } catch {
+    throw new GithubError("github no respondio como se esperaba");
+  }
+  if (!Array.isArray(data)) {
+    throw new GithubError(`no se pudo listar los repositorios: ${String(data?.message ?? "sin motivo").slice(0, 120)}`);
+  }
+  return data.map((r) => ({
+    full_name: r.full_name,
+    private: Boolean(r.private),
+    archived: Boolean(r.archived),
+    default_branch: r.default_branch ?? null,
+    pushed_at: r.pushed_at ?? null,
+    description: r.description ?? null,
+    language: r.language ?? null,
+  }));
+}
+
+/**
  * Clone a repository — public or private — on the host, returning a directory with the code
  * and **no credentials anywhere in it**.
  *

@@ -14,6 +14,7 @@ import { OrchestratorError, createOrchestrator } from "./orchestrator.mjs";
 import { createSealedStore } from "./sealed.mjs";
 import { createCredentialStore } from "./credentials.mjs";
 import { describeConfiguration, instructions, requestDeviceCode, waitForToken } from "./oauth.mjs";
+import { listRepos, whoami } from "./github.mjs";
 import { open as openSealed, seal as sealBytes } from "../web/seal.mjs";
 import { issueGrant, verifyGrant } from "./grant.mjs";
 
@@ -199,14 +200,43 @@ export function createApi(
        * so saving a token must not require a sandbox to exist first. The token travels in
        * the body once and is never echoed back.
        */
-      if (parts[1] === "account" && parts.length === 2 && req.method === "POST") {
+      if (parts[1] === "account" && parts.length === 2) {
+        if (req.method === "POST") {
+          const body = await readBody(req);
+          const stored = await credentials.put(body.id ?? "github", String(body.token ?? ""), {
+            scopes: Array.isArray(body.scopes) ? body.scopes : [],
+            expiresAt: body.expiresAt ?? null,
+            passphrase: body.passphrase ?? null,
+          });
+          return send(res, 201, stored);
+        }
+        if (req.method === "GET") {
+          return send(res, 200, { accounts: credentials.list() });
+        }
+        if (req.method === "DELETE") {
+          const body = await readBody(req);
+          const id = body.id ?? "github";
+          if (!credentials.forget(id)) {
+            return send(res, 409, { error: "no hay ninguna cuenta guardada con ese id" });
+          }
+          return send(res, 200, { forgotten: id });
+        }
+        return send(res, 405, { error: "method not allowed" });
+      }
+
+      /**
+       * The person's repositories, read on the host with their token, for the picker.
+       * The reply is names, dates and flags — never the token, and never a way to use it.
+       */
+      if (parts[1] === "repos" && parts.length === 2 && req.method === "POST") {
         const body = await readBody(req);
-        const stored = await credentials.put(body.id ?? "github", String(body.token ?? ""), {
-          scopes: Array.isArray(body.scopes) ? body.scopes : [],
-          expiresAt: body.expiresAt ?? null,
-          passphrase: body.passphrase ?? null,
-        });
-        return send(res, 201, stored);
+        const accountId = body.accountId ?? "github";
+        const usable = credentials.usable(accountId);
+        if (!usable.ok) return send(res, 409, { error: usable.reason });
+        const token = await credentials.unlock(accountId, body.passphrase ?? null);
+        const account = await whoami(token);
+        const repos = await listRepos(token);
+        return send(res, 200, { login: account.login, name: account.name, count: repos.length, repos });
       }
 
       // GET /api/sandboxes  ·  POST /api/sandboxes
