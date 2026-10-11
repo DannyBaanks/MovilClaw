@@ -20,7 +20,7 @@
     --line-subtle: #192338;
     --ink: #f1f5f9;
     --ink-muted: #94a3b8;
-    --ink-dim: #64748b;
+    --ink-dim: #8190a8;
     --cyan: #00dec6;
     --cyan-glow: rgba(0, 222, 198, 0.25);
     --blue: #0284c7;
@@ -858,6 +858,45 @@
     border-radius: 6px;
   }
   .mob-tab-btn.active { color: var(--cyan); background: rgba(0, 222, 198, 0.1); }
+
+  /* ---------------- UX polish layer (Dark OLED, developer tool) ---------------- */
+  :root {
+    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+  }
+  /* Keyboard focus: the old rules removed outlines and gave nothing back. */
+  :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--cyan);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  .field:focus-visible, textarea:focus-visible { outline-offset: 0; }
+  /* Pressed feedback without moving layout (no transform on size). */
+  button { transition: background-color 150ms var(--ease), color 150ms var(--ease), filter 150ms var(--ease), border-color 150ms var(--ease); }
+  button:active:not(:disabled) { filter: brightness(0.88); }
+  button:disabled, .btn-ops:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-ops, .nav-pill-btn, .mob-tab-btn, .dock-btn, .icon-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  :where(pre, code, .field[data-mono], .change-file-name, .diff-stats) { font-family: var(--font-mono); }
+
+  /* Touch: >=44px targets and iOS safe areas on phones. */
+  @media (max-width: 960px) {
+    .icon-btn, .dock-btn { min-width: 44px; min-height: 44px; }
+    .btn-ops, .btn-ops[style], .nav-pill-btn { min-height: 44px; }
+    .mob-tab-btn { min-height: 44px; padding: 6px 14px; }
+    .mobile-tabs { height: calc(48px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
+    .chat-panel { padding-top: calc(48px + env(safe-area-inset-top)); padding-bottom: env(safe-area-inset-bottom); }
+    .drawer-sheet { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+    input, select, textarea, .field { font-size: 16px; } /* stops iOS zoom-on-focus */
+  }
+  /* Respect users who ask for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1836,6 +1875,27 @@ window.openPullRequest = async function() {
 checkHealth();
 refreshSandboxes();
 setInterval(refreshSandboxes, 10000);
+
+// ── Accessibility pass ──
+// Icon-only buttons carried just a `title` (not reliably announced) or a bare glyph.
+// Name them once at load and again whenever the sandbox list re-renders.
+const GLYPH_LABELS = { "✕": "Cerrar", "+": "Añadir" };
+function nameControls(root = document) {
+  root.querySelectorAll("button:not([aria-label])").forEach((b) => {
+    const text = b.textContent.trim();
+    const label = b.getAttribute("title") || GLYPH_LABELS[text];
+    if (label && (!text || GLYPH_LABELS[text] || b.getAttribute("title"))) b.setAttribute("aria-label", label);
+    if (!b.getAttribute("type")) b.setAttribute("type", "button");
+  });
+  root.querySelectorAll("svg:not([aria-hidden])").forEach((s) => s.setAttribute("aria-hidden", "true"));
+}
+nameControls();
+new MutationObserver((records) => {
+  for (const r of records) r.addedNodes.forEach((n) => n.nodeType === 1 && nameControls(n));
+}).observe(document.body, { childList: true, subtree: true });
+const toastEl = document.getElementById("toast");
+if (toastEl) { toastEl.setAttribute("role", "status"); toastEl.setAttribute("aria-live", "polite"); }
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") window.closeDrawer?.(); });
 </script>
 </body>
 </html>
