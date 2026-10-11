@@ -92,9 +92,9 @@ struct WebViewContainer: UIViewRepresentable {
                         try sandbox.writeFile(path: path, content: content)
                     case "runPython":
                         let code = body["code"] as? String ?? ""
-                        let result = await PythonRunner.shared.runScript(code: code)
+                        let result = await PythonRunner.shared.run(code: code)
                         response["output"] = result.output
-                        response["exitCode"] = result.exitCode
+                        response["exitCode"] = result.code
                         response["error"] = result.error
                     default:
                         response = ["status": "error", "error": "Acción nativa no reconocida: \(action)"]
