@@ -5,6 +5,13 @@ enum ExecutionEngineMode: String, CaseIterable, Identifiable {
     case remote = "🖥️ PC (Docker)"
     
     var id: String { rawValue }
+    
+    var iconName: String {
+        switch self {
+        case .local: return "iphone"
+        case .remote: return "desktopcomputer"
+        }
+    }
 }
 
 struct ContentView: View {
@@ -20,62 +27,88 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            Color(red: 0.03, green: 0.05, blue: 0.08).ignoresSafeArea()
+            Color(red: 0.03, green: 0.05, blue: 0.08)
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Top Native Bar con selector de Engine
-                HStack(spacing: 10) {
+                // Top Native Bar con Apple Design (Touch Targets >= 44pt y feedback háptico)
+                HStack(spacing: 12) {
                     // Selector de Modo (Local iPhone vs Remoto PC)
                     Menu {
                         ForEach(ExecutionEngineMode.allCases) { mode in
-                            Button(action: { engineMode = mode }) {
-                                HStack {
+                            Button(action: {
+                                Haptics.selection()
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    engineMode = mode
+                                }
+                            }) {
+                                Label {
                                     Text(mode.rawValue)
-                                    if engineMode == mode {
-                                        Image(systemName: "checkmark")
-                                    }
+                                } icon: {
+                                    Image(systemName: mode.iconName)
                                 }
                             }
                         }
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             Circle()
                                 .fill(engineMode == .local ? Color(red: 0.0, green: 0.87, blue: 0.78) : (isConnected ? Color(red: 0.13, green: 0.77, blue: 0.37) : Color(red: 0.94, green: 0.27, blue: 0.27)))
-                                .frame(width: 7, height: 7)
+                                .frame(width: 8, height: 8)
+                            
                             Text(engineMode.rawValue)
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.system(.subheadline, design: .default).weight(.semibold))
                                 .foregroundColor(.white)
+                            
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
                         .background(Color(red: 0.08, green: 0.12, blue: 0.20))
-                        .cornerRadius(6)
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color(red: 0.14, green: 0.20, blue: 0.30), lineWidth: 1)
+                        )
                     }
                     
                     Spacer()
                     
                     if engineMode == .remote {
-                        Button(action: { reloadKey = UUID() }) {
+                        Button(action: {
+                            Haptics.impact(.light)
+                            reloadKey = UUID()
+                        }) {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
-                                .padding(6)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(Color(red: 0.70, green: 0.76, blue: 0.84))
+                                .frame(width: 44, height: 44)
+                                .background(Color(red: 0.08, green: 0.12, blue: 0.20))
+                                .cornerRadius(10)
                         }
+                        .accessibilityLabel("Recargar servidor")
                     }
                     
-                    Button(action: { showSettingsSheet = true }) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 12, weight: .bold))
+                    Button(action: {
+                        Haptics.impact(.light)
+                        showSettingsSheet = true
+                    }) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(Color(red: 0.0, green: 0.87, blue: 0.78))
-                            .padding(6)
+                            .frame(width: 44, height: 44)
+                            .background(Color(red: 0.08, green: 0.12, blue: 0.20))
+                            .cornerRadius(10)
                     }
+                    .accessibilityLabel("Configuración y ajustes")
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
                 .background(Color(red: 0.04, green: 0.06, blue: 0.10))
+                
+                Divider()
+                    .background(Color(red: 0.12, green: 0.16, blue: 0.24))
                 
                 // Contenido según el modo seleccionado
                 if engineMode == .local {
@@ -88,6 +121,7 @@ struct ContentView: View {
                     // Modo Remoto: Docker en la PC
                     if isConnected, let targetURL = URL(string: serverURL) {
                         WebViewContainer(url: targetURL, onReload: {
+                            Haptics.impact(.light)
                             reloadKey = UUID()
                         })
                         .id(reloadKey)
@@ -102,10 +136,12 @@ struct ContentView: View {
                 currentURL: serverURL,
                 engineMode: $engineMode,
                 onDisconnect: {
+                    Haptics.notification(.warning)
                     showSettingsSheet = false
                     isConnected = false
                 },
                 onReload: {
+                    Haptics.impact(.light)
                     showSettingsSheet = false
                     reloadKey = UUID()
                 }
@@ -114,88 +150,118 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Vista Local del Sandbox en iPhone
+// MARK: - Vista Local del Sandbox en iPhone (Apple Design & Terminal Craft)
 struct LocalDeviceSandboxView: View {
     @Binding var output: String
     @Binding var isRunning: Bool
     @State private var pythonCodeInput: String = "def sumar(a, b):\n    return a + b\n\nprint('Resultado en iPhone:', sumar(20, 22))"
-    @State private var activeTab: String = "python"
+    @FocusState private var isEditorFocused: Bool
     
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             // Header del Sandbox Local
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Sandbox Local en iPhone")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.headline, design: .default).weight(.bold))
                         .foregroundColor(.white)
-                    Text("Python WASM / CPython en dispositivo · Sin servidor PC")
-                        .font(.system(size: 11))
+                    Text("Python WASM en dispositivo · Aislado de red y disco")
+                        .font(.footnote)
                         .foregroundColor(Color(red: 0.0, green: 0.87, blue: 0.78))
                 }
                 Spacer()
                 Button(action: runTestScript) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         if isRunning {
-                            ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .black))
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.03, green: 0.08, blue: 0.12)))
                         } else {
                             Image(systemName: "play.fill")
+                                .font(.caption)
                         }
                         Text(isRunning ? "Ejecutando..." : "Ejecutar")
+                            .font(.system(.subheadline, design: .default).weight(.bold))
                     }
-                    .font(.system(size: 12, weight: .bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 44)
                     .background(Color(red: 0.0, green: 0.87, blue: 0.78))
                     .foregroundColor(Color(red: 0.03, green: 0.08, blue: 0.12))
-                    .cornerRadius(8)
+                    .cornerRadius(10)
+                    .shadow(color: Color(red: 0.0, green: 0.87, blue: 0.78).opacity(isRunning ? 0.1 : 0.3), radius: 8, y: 3)
                 }
                 .disabled(isRunning)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 10)
+            .padding(.top, 12)
             
             // Editor de código local
-            VStack(alignment: .leading, spacing: 6) {
-                Text("EDITOR DE SCRIPT (main.py)")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
-                    .padding(.horizontal, 16)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("EDITOR DE CÓDIGO (main.py)", systemImage: "chevron.left.forwardslash.chevron.right")
+                        .font(.system(.caption, design: .default).weight(.semibold))
+                        .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
+                        .tracking(0.5)
+                    Spacer()
+                    if isEditorFocused {
+                        Button("Listo") {
+                            isEditorFocused = false
+                        }
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(Color(red: 0.0, green: 0.87, blue: 0.78))
+                    }
+                }
+                .padding(.horizontal, 16)
                 
                 TextEditor(text: $pythonCodeInput)
-                    .font(.system(size: 13, design: .monospaced))
+                    .focused($isEditorFocused)
+                    .font(.system(.body, design: .monospaced))
                     .foregroundColor(Color(red: 0.94, green: 0.96, blue: 0.98))
-                    .padding(8)
+                    .padding(10)
                     .background(Color(red: 0.06, green: 0.08, blue: 0.14))
-                    .cornerRadius(10)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(red: 0.14, green: 0.20, blue: 0.30), lineWidth: 1))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(isEditorFocused ? Color(red: 0.0, green: 0.87, blue: 0.78).opacity(0.8) : Color(red: 0.14, green: 0.20, blue: 0.30), lineWidth: 1.2)
+                    )
                     .padding(.horizontal, 16)
-                    .frame(height: 160)
+                    .frame(height: 180)
             }
             
             // Consola de Salida del iPhone
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("SALIDA DE CONSOLA (iPhone Stdout/Stderr)")
-                        .font(.system(size: 10, weight: .bold))
+                    Label("SALIDA DE CONSOLA (Stdout / Stderr)", systemImage: "terminal")
+                        .font(.system(.caption, design: .default).weight(.semibold))
                         .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
+                        .tracking(0.5)
                     Spacer()
-                    Button("Limpiar") { output = "" }
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(red: 0.0, green: 0.87, blue: 0.78))
+                    if !output.isEmpty {
+                        Button(action: {
+                            Haptics.selection()
+                            output = ""
+                        }) {
+                            Text("Limpiar")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(Color(red: 0.0, green: 0.87, blue: 0.78))
+                                .frame(minWidth: 44, minHeight: 32)
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
                 
                 ScrollView {
-                    Text(output.isEmpty ? "Toca 'Ejecutar' para correr el código directamente en el iPhone..." : output)
-                        .font(.system(size: 12, design: .monospaced))
+                    Text(output.isEmpty ? "Toca 'Ejecutar' para correr el código en el runtime local del iPhone..." : output)
+                        .font(.system(.footnote, design: .monospaced))
                         .foregroundColor(output.isEmpty ? Color(red: 0.40, green: 0.46, blue: 0.54) : Color(red: 0.55, green: 0.94, blue: 0.76))
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
+                        .padding(14)
                 }
                 .background(Color(red: 0.04, green: 0.06, blue: 0.10))
-                .cornerRadius(10)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(red: 0.14, green: 0.20, blue: 0.30), lineWidth: 1))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color(red: 0.14, green: 0.20, blue: 0.30), lineWidth: 1)
+                )
                 .padding(.horizontal, 16)
                 .frame(maxHeight: .infinity)
             }
@@ -203,14 +269,23 @@ struct LocalDeviceSandboxView: View {
     }
     
     private func runTestScript() {
+        isEditorFocused = false
         isRunning = true
+        Haptics.impact(.medium)
+        
         Task {
             // Guarda el archivo en el sandbox local aislado
             _ = try? await LocalDeviceSandbox.shared.writeFile(path: "main.py", content: pythonCodeInput)
             // Ejecuta el código en el iPhone con PythonRunner
             let result = await PythonRunner.shared.run(code: pythonCodeInput)
+            
             DispatchQueue.main.async {
                 isRunning = false
+                if result.success {
+                    Haptics.notification(.success)
+                } else {
+                    Haptics.notification(.error)
+                }
                 let status = result.success ? "✓ Exitoso (código 0)" : "✕ Error (código \(result.code))"
                 let body = result.output.isEmpty ? (result.error ?? "Sin salida") : result.output
                 output = "[\(status)]\n\(body)"
@@ -219,7 +294,7 @@ struct LocalDeviceSandboxView: View {
     }
 }
 
-// MARK: - Settings Sheet
+// MARK: - Settings Sheet (Apple NavigationStack & Grouped Cards)
 struct SettingsSheet: View {
     let currentURL: String
     @Binding var engineMode: ExecutionEngineMode
@@ -228,98 +303,128 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ZStack {
-            Color(red: 0.05, green: 0.07, blue: 0.12).ignoresSafeArea()
-            
-            VStack(spacing: 18) {
-                HStack {
-                    Text("Configuración de Motor")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Button("Cerrar") { dismiss() }
-                        .foregroundColor(Color(red: 0.0, green: 0.87, blue: 0.78))
-                }
-                .padding(.top, 20)
+        NavigationStack {
+            ZStack {
+                Color(red: 0.05, green: 0.07, blue: 0.12)
+                    .ignoresSafeArea()
                 
-                Picker("Motor", selection: $engineMode) {
-                    ForEach(ExecutionEngineMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                
-                if engineMode == .remote {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("SERVIDOR PC CONECTADO:")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
-                        Text(currentURL.isEmpty ? "No configurado" : currentURL)
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundColor(.white)
-                            .padding(10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Selector de Motor con Picker Nativo
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("MOTOR DE EJECUCIÓN")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(Color(red: 0.0, green: 0.87, blue: 0.78))
+                                .tracking(0.6)
+                            
+                            Picker("Motor", selection: $engineMode) {
+                                ForEach(ExecutionEngineMode.allCases) { mode in
+                                    Text(mode.rawValue).tag(mode)
+                                }
+                            }
+                            .pickerStyle(SegmentedPickerStyle())
+                            .onChange(of: engineMode) { _ in
+                                Haptics.selection()
+                            }
+                        }
+                        .padding(16)
+                        .background(Color(red: 0.08, green: 0.11, blue: 0.18))
+                        .cornerRadius(16)
+                        
+                        // Opciones según el motor
+                        if engineMode == .remote {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("SERVIDOR PC")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
+                                
+                                Text(currentURL.isEmpty ? "No configurado" : currentURL)
+                                    .font(.system(.body, design: .monospaced))
+                                    .foregroundColor(.white)
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(red: 0.05, green: 0.07, blue: 0.12))
+                                    .cornerRadius(10)
+                                
+                                Button(action: onReload) {
+                                    HStack {
+                                        Image(systemName: "arrow.clockwise")
+                                        Text("Recargar Interfaz Web")
+                                            .font(.subheadline.weight(.semibold))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(minHeight: 46)
+                                    .background(Color(red: 0.10, green: 0.14, blue: 0.24))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
+                                }
+                                
+                                Button(action: onDisconnect) {
+                                    HStack {
+                                        Image(systemName: "power")
+                                        Text("Desconectar de PC")
+                                            .font(.subheadline.weight(.semibold))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(minHeight: 46)
+                                    .background(Color(red: 0.94, green: 0.27, blue: 0.27).opacity(0.15))
+                                    .foregroundColor(Color(red: 0.97, green: 0.44, blue: 0.44))
+                                    .cornerRadius(12)
+                                }
+                            }
+                            .padding(16)
                             .background(Color(red: 0.08, green: 0.11, blue: 0.18))
-                            .cornerRadius(8)
-                    }
-                    
-                    Button(action: onReload) {
-                        HStack {
-                            Image(systemName: "arrow.clockwise")
-                            Text("Recargar Interfaz Web")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color(red: 0.09, green: 0.13, blue: 0.22))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                    }
-                    
-                    Button(action: onDisconnect) {
-                        HStack {
-                            Image(systemName: "power")
-                            Text("Desconectar de PC")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color(red: 0.94, green: 0.27, blue: 0.27).opacity(0.15))
-                        .foregroundColor(Color(red: 0.97, green: 0.44, blue: 0.44))
-                        .cornerRadius(10)
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("SANDBOX IPHONE LOCAL:")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
-                        Text("Aislamiento estricto en Documents/MovilClaw/work/app.\nCero acceso a Keychain ni a la red local sin autorización.")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(red: 0.70, green: 0.76, blue: 0.84))
-                            .padding(10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .cornerRadius(16)
+                        } else {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("SANDBOX IPHONE")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(Color(red: 0.58, green: 0.64, blue: 0.72))
+                                
+                                Text("Aislamiento estricto en Documents/MovilClaw/work/app.\nCero acceso a Keychain ni a la red local sin autorización.")
+                                    .font(.footnote)
+                                    .foregroundColor(Color(red: 0.70, green: 0.76, blue: 0.84))
+                                    .lineSpacing(3)
+                                
+                                Button(action: {
+                                    Haptics.notification(.warning)
+                                    Task { try? await LocalDeviceSandbox.shared.resetWorkspace() }
+                                    dismiss()
+                                }) {
+                                    HStack {
+                                        Image(systemName: "trash.fill")
+                                        Text("Limpiar Workspace Local")
+                                            .font(.subheadline.weight(.semibold))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(minHeight: 46)
+                                    .background(Color(red: 0.94, green: 0.27, blue: 0.27).opacity(0.15))
+                                    .foregroundColor(Color(red: 0.94, green: 0.40, blue: 0.40))
+                                    .cornerRadius(12)
+                                }
+                            }
+                            .padding(16)
                             .background(Color(red: 0.08, green: 0.11, blue: 0.18))
-                            .cornerRadius(8)
-                    }
-                    
-                    Button(action: {
-                        Task { try? await LocalDeviceSandbox.shared.resetWorkspace() }
-                        dismiss()
-                    }) {
-                        HStack {
-                            Image(systemName: "trash")
-                            Text("Limpiar Workspace Local")
+                            .cornerRadius(16)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color(red: 0.09, green: 0.13, blue: 0.22))
-                        .foregroundColor(Color(red: 0.94, green: 0.40, blue: 0.40))
-                        .cornerRadius(10)
                     }
+                    .padding(20)
                 }
-                
-                Spacer()
             }
-            .padding(.horizontal, 20)
+            .navigationTitle("Ajustes")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Listo") {
+                        Haptics.selection()
+                        dismiss()
+                    }
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(Color(red: 0.0, green: 0.87, blue: 0.78))
+                }
+            }
         }
-        .presentationDetents([.fraction(0.5)])
+        .presentationDragIndicator(.visible)
+        .presentationDetents([.medium, .large])
     }
 }

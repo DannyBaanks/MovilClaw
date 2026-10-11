@@ -55,6 +55,7 @@ struct WebViewContainer: UIViewRepresentable {
         }
         
         @objc func handleRefresh(_ sender: UIRefreshControl) {
+            Haptics.impact(.medium)
             sender.endRefreshing()
             parent.onReload?()
         }
