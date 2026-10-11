@@ -1,0 +1,49 @@
+name: MovilClaw
+options:
+  bundleIdPrefix: dev.movilclaw
+  deploymentTarget:
+    iOS: "16.4"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.4"
+    PRODUCT_NAME: MovilClaw
+    GENERATE_INFOPLIST_FILE: NO
+    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.0.0"
+
+targets:
+  MovilClaw:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        type: group
+      - path: Assets.xcassets
+        type: group
+      - path: ../web
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.movilclaw.ios
+        PRODUCT_NAME: MovilClaw
+        DEFINES_MODULE: NO
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_FILE: Info.plist
+
+schemes:
+  MovilClaw:
+    build:
+      targets:
+        MovilClaw: all
+    run:
+      config: Release
+    profile:
+      config: Release

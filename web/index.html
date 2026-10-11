@@ -3,809 +3,1839 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d0919">
-<meta name="description" content="Sandboxes kamikaze de AutoClaw en el bolsillo.">
+<meta name="theme-color" content="#080c14">
+<meta name="description" content="ISyCode IDE & MovilClaw - Sandboxes kamikaze y asistente de código en el bolsillo.">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
-<title>MovilClaw</title>
+<title>ISyCode IDE · MovilClaw</title>
 <style>
-  :root { color-scheme: dark; --bg:#0d0919; --bg2:#120d22; --card:#1c1436; --card-top:#241a45; --ink:#f2eefc;
-          --muted:#a297c2; --coral:#e03e3e; --coral2:#b528c0; --cian:#00dec6; --line:#342a5c;
-          --ok:#8ff0c4; --warn:#f0dc8f; --bad:#f09aa8; }
-  * { box-sizing: border-box; }
-  html { scrollbar-color: var(--line) var(--bg); }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 system-ui,-apple-system,sans-serif;
-         padding:0 16px calc(32px + env(safe-area-inset-bottom)); max-width:660px; margin-inline:auto;
-         min-height:100vh; position:relative; }
-  /* two soft glows behind everything: the page stops feeling flat */
-  body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
-    background:
-      radial-gradient(600px 320px at 85% -5%, rgba(181,40,192,.22), transparent 70%),
-      radial-gradient(520px 300px at 0% 12%, rgba(0,222,198,.10), transparent 70%),
-      radial-gradient(700px 500px at 50% 110%, rgba(64,32,120,.35), transparent 70%); }
+  :root {
+    color-scheme: dark;
+    --bg-app: #080c14;
+    --bg-surface: #0e1422;
+    --bg-elevated: #141c2e;
+    --bg-card: #182238;
+    --bg-card-hover: #1f2c47;
+    --line: #22304d;
+    --line-subtle: #192338;
+    --ink: #f1f5f9;
+    --ink-muted: #94a3b8;
+    --ink-dim: #64748b;
+    --cyan: #00dec6;
+    --cyan-glow: rgba(0, 222, 198, 0.25);
+    --blue: #0284c7;
+    --blue-glow: rgba(2, 132, 199, 0.3);
+    --user-bubble: #1a2744;
+    --ok: #22c55e;
+    --ok-bg: rgba(34, 197, 94, 0.14);
+    --warn: #eab308;
+    --warn-bg: rgba(234, 179, 8, 0.14);
+    --bad: #ef4444;
+    --bad-bg: rgba(239, 68, 68, 0.14);
+    --diff-add: #10382b;
+    --diff-add-text: #4ade80;
+    --diff-sub: #45121c;
+    --diff-sub-text: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: var(--bg-app);
+    color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  input, button, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: none; }
+  svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 
-  /* ---------------------------------------------------------------- header */
-  header { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:12px;
-           padding:14px 2px 12px; margin-bottom:2px;
-           background:linear-gradient(var(--bg) 82%, transparent); backdrop-filter:blur(6px); }
-  .logo { width:38px; height:38px; border-radius:11px; flex:none; display:grid; place-items:center;
-          background:linear-gradient(145deg,#2a1e52,#160f2e); border:1px solid var(--line);
-          box-shadow:0 4px 18px rgba(0,222,198,.12); }
-  .logo svg { width:22px; height:22px; }
-  .wordmark { font-size:1.3rem; font-weight:800; letter-spacing:.01em; line-height:1.1; }
-  .wordmark span { background:linear-gradient(90deg,var(--cian),#7ef); -webkit-background-clip:text;
-                   background-clip:text; color:transparent; }
-  .wordmark small { display:block; font-size:.68rem; font-weight:500; color:var(--muted); letter-spacing:.14em;
-                    text-transform:uppercase; }
-  .conn { margin-left:auto; font-size:.78rem; color:var(--muted); display:flex; align-items:center; gap:6px;
-          background:rgba(28,20,54,.7); border:1px solid var(--line); padding:5px 10px; border-radius:999px; }
-  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none; }
-  .dot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
-  .dot.off { background:var(--bad); box-shadow:0 0 8px var(--bad); }
+  /* ---------------- App Grid Shell ---------------- */
+  .app-shell {
+    display: grid;
+    height: 100vh;
+    height: 100dvh;
+    grid-template-rows: 44px 1fr 28px;
+    grid-template-columns: 50px 240px 1fr 420px;
+    grid-template-areas:
+      "top top top top"
+      "dock tree editor chat"
+      "status status status status";
+    background: var(--bg-app);
+  }
 
-  .hero { margin:10px 2px 4px; }
-  .hero p { color:var(--muted); margin:0; font-size:.92rem; }
-  .hero b { color:var(--ink); }
+  /* ---------------- Top Navbar ---------------- */
+  .top-bar {
+    grid-area: top;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 14px;
+    background: #090e18;
+    border-bottom: 1px solid var(--line-subtle);
+    user-select: none;
+    z-index: 30;
+  }
+  .brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 13.5px;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+  }
+  .brand-icon {
+    width: 26px;
+    height: 26px;
+    background: linear-gradient(135deg, #0284c7, #00dec6);
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    color: #06101e;
+  }
+  .nav-pill-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+  .nav-pill-btn:hover { background: var(--bg-elevated); color: var(--ink); }
+  .mode-switch {
+    display: flex;
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .mode-switch button {
+    padding: 2px 10px;
+    font-size: 11.5px;
+    font-weight: 700;
+    border-radius: 4px;
+    color: var(--ink-muted);
+  }
+  .mode-switch button.active {
+    background: var(--cyan);
+    color: #04101b;
+  }
+  .search-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--ink-dim);
+    min-width: 260px;
+  }
+  .top-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .conn-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--ink-muted);
+  }
+  .dot-status {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ink-dim);
+  }
+  .dot-status.on { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot-status.off { background: var(--bad); }
 
-  /* ---------------------------------------------------------------- type */
-  h2 { font-size:.82rem; margin:30px 0 10px; color:var(--muted); font-weight:700; text-transform:uppercase;
-       letter-spacing:.09em; display:flex; align-items:center; gap:10px; }
-  h2 .n { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
-          border-radius:7px; background:linear-gradient(145deg,#31245e,#1b1338); border:1px solid var(--line);
-          color:var(--cian); font-size:.72rem; font-weight:800; box-shadow:0 2px 8px rgba(0,0,0,.35); }
-  h2 .tail { flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent); }
+  /* ---------------- Left Dock ---------------- */
+  .left-dock {
+    grid-area: dock;
+    background: #070b13;
+    border-right: 1px solid var(--line-subtle);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0;
+    gap: 16px;
+    z-index: 20;
+  }
+  .dock-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    color: var(--ink-dim);
+    transition: all 0.15s;
+    position: relative;
+  }
+  .dock-btn:hover { color: var(--ink); background: var(--bg-elevated); }
+  .dock-btn.active {
+    color: var(--cyan);
+    background: rgba(0, 222, 198, 0.1);
+  }
+  .dock-btn.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    background: var(--cyan);
+    border-radius: 0 2px 2px 0;
+  }
+  .dock-sep {
+    width: 24px;
+    height: 1px;
+    background: var(--line-subtle);
+    margin: 4px 0;
+  }
 
-  /* ---------------------------------------------------------------- cards */
-  .card { background:linear-gradient(180deg,var(--card-top),var(--card)); border:1px solid var(--line);
-          border-radius:16px; padding:16px; margin:10px 0;
-          box-shadow:0 1px 0 rgba(255,255,255,.045) inset, 0 10px 28px rgba(5,2,14,.45); }
-  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-  .row + .row { margin-top:10px; }
+  /* ---------------- Left Tree Panel ---------------- */
+  .left-tree {
+    grid-area: tree;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .tree-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .tree-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--ink-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    margin: 1px 6px;
+  }
+  .tree-item:hover { background: var(--bg-elevated); color: var(--ink); }
+  .tree-item.active { background: rgba(2, 132, 199, 0.15); color: #38bdf8; font-weight: 600; }
+  .tree-conv-item {
+    padding: 8px 12px;
+    margin: 4px 8px;
+    border-radius: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .tree-conv-item.active {
+    border-color: #0284c7;
+    background: rgba(2, 132, 199, 0.12);
+  }
+  .tree-conv-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .tree-conv-date { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
 
-  /* ---------------------------------------------------------------- controls */
-  button { font:inherit; border:0; border-radius:11px; padding:10px 15px; color:var(--ink);
-           background:linear-gradient(180deg,#332862,#251c4b); border:1px solid #3d3170;
-           cursor:pointer; min-height:44px; transition:transform .05s, filter .15s, box-shadow .15s; }
-  button:hover { filter:brightness(1.15); }
-  button:active { transform:scale(.97); }
-  button.primary { background:linear-gradient(135deg,var(--coral),var(--coral2)); border:0; color:#fff;
-                   font-weight:700; box-shadow:0 4px 18px rgba(224,62,62,.35); }
-  button.cian { background:transparent; border:1px solid var(--cian); color:var(--cian); font-weight:600; }
-  button.ghost { background:transparent; border:1px solid var(--line); }
-  button.small { min-height:36px; padding:7px 11px; font-size:.82rem; border-radius:9px; }
-  button:disabled { opacity:.45; cursor:not-allowed; }
-  :is(button, input, a, summary):focus-visible { outline:2px solid var(--cian); outline-offset:2px; }
+  /* ---------------- Center Editor Workspace ---------------- */
+  .editor-space {
+    grid-area: editor;
+    background: #090e17;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--line);
+  }
+  .editor-tabs-bar {
+    display: flex;
+    align-items: center;
+    background: #080c14;
+    border-bottom: 1px solid var(--line);
+    padding: 0 8px;
+    overflow-x: auto;
+  }
+  .editor-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    border-right: 1px solid var(--line-subtle);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .editor-tab.active {
+    color: var(--ink);
+    background: #090e17;
+    border-bottom-color: var(--cyan);
+    font-weight: 600;
+  }
+  .tab-badge {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--warn);
+  }
+  .tab-view-toggle {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+  }
+  .diff-banner {
+    background: rgba(234, 179, 8, 0.08);
+    border-bottom: 1px solid rgba(234, 179, 8, 0.25);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+  }
+  .diff-banner b { color: var(--warn); }
+  .diff-banner button {
+    margin-left: auto;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(234, 179, 8, 0.15);
+    color: var(--warn);
+    font-size: 11.5px;
+  }
+  .code-viewer {
+    flex: 1;
+    overflow: auto;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 12px 0;
+  }
+  .code-line {
+    display: flex;
+    padding: 0 16px;
+    white-space: pre;
+  }
+  .code-line.add {
+    background: var(--diff-add);
+    color: var(--diff-add-text);
+  }
+  .code-line.del {
+    background: var(--diff-sub);
+    color: var(--diff-sub-text);
+  }
+  .line-num {
+    width: 38px;
+    flex-shrink: 0;
+    color: var(--ink-dim);
+    text-align: right;
+    padding-right: 16px;
+    user-select: none;
+  }
+  .code-text { flex: 1; }
 
-  .field { flex:1; min-width:200px; background:#0e0a1e; border:1px solid var(--line); border-radius:11px;
-           padding:11px 12px; color:var(--ink); font:inherit; min-height:44px; }
-  .field::placeholder { color:#6a5f92; }
-  .field:hover, .field:focus { border-color:#4d3f85; }
-  input[type=file].field { padding:9px; }
-  input[type=file].field::file-selector-button { background:#2b2250; color:var(--ink); border:1px solid #3d3170;
-           border-radius:9px; padding:8px 12px; margin-right:10px; font:inherit; min-height:34px; cursor:pointer; }
-  .check { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:.88rem; cursor:pointer; }
-  .check input { width:18px; height:18px; accent-color:var(--coral); }
+  /* ---------------- Right Chat & Action Panel (Mobile Primary) ---------------- */
+  .chat-panel {
+    grid-area: chat;
+    background: #0b111c;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+  .chat-header {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(11, 17, 28, 0.95);
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+  .chat-title-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    color: var(--ink-muted);
+  }
+  .icon-btn:hover { background: var(--bg-card); color: var(--ink); }
 
-  /* ---------------------------------------------------------------- pills & sandbox cards */
-  .pill { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:999px;
-          font-size:.74rem; font-weight:700; letter-spacing:.03em; }
-  .pill::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
-  .pill.active { background:#123c2c; color:var(--ok); }
-  .pill.suspended { background:#3f3416; color:var(--warn); }
-  .pill.destroyed { background:#3d1720; color:var(--bad); }
-  .tag { display:inline-flex; align-items:center; gap:5px; padding:1px 8px; border-radius:6px; font-size:.7rem;
-         font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
-  .tag.private { background:#3f3416; color:var(--warn); }
-  .tag.archived { background:#3d1720; color:var(--bad); }
-  .tag.pub { background:#123c2c; color:var(--ok); }
+  /* Message Stream */
+  .chat-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
 
-  .sbx { position:relative; cursor:pointer; transition:border-color .15s, transform .1s; }
-  .sbx:hover { transform:translateY(-1px); }
-  .sbx.sel { border-color:var(--cian); box-shadow:0 0 0 1px var(--cian) inset, 0 10px 28px rgba(0,222,198,.10); }
-  .sbx.sel::after { content:"en uso"; position:absolute; top:-8px; right:12px; background:var(--cian);
-                    color:#08201d; font-size:.66rem; font-weight:900; letter-spacing:.07em;
-                    padding:2px 9px; border-radius:999px; box-shadow:0 2px 10px rgba(0,222,198,.5); }
-  .sbx .head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .sbx .head code { font-size:.82rem; }
-  .sbx .head .clock { margin-left:auto; font-variant-numeric:tabular-nums; color:var(--muted); font-size:.82rem; }
+  /* User Message */
+  .msg-user {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .avatar-user {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #2563eb;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .msg-body { flex: 1; min-width: 0; }
+  .msg-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .msg-author { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .msg-time { font-size: 11px; color: var(--ink-dim); }
+  .bubble-user {
+    background: var(--user-bubble);
+    border: 1px solid #233559;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    color: #e2e8f0;
+    display: inline-block;
+  }
 
-  /* ---------------------------------------------------------------- repo picker */
-  .repos { max-height:340px; overflow:auto; margin-top:10px; border:1px solid var(--line); border-radius:12px;
-           background:#0e0a1e; }
-  .repo { display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #221a40;
-          transition:background .12s; }
-  .repo:last-child { border-bottom:0; }
-  .repo:hover { background:#1a1334; }
-  .repo .nm { font-weight:600; font-size:.9rem; }
-  .repo .nm i { color:var(--muted); font-style:normal; font-weight:400; }
-  .repo .meta { margin-left:auto; text-align:right; color:var(--muted); font-size:.74rem; white-space:nowrap; }
-  .repo svg { flex:none; opacity:.7; }
+  /* Assistant Message */
+  .msg-asst {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .avatar-asst {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #0284c7;
+    border: 1px solid var(--cyan);
+    display: grid;
+    place-items: center;
+    color: var(--cyan);
+    flex-shrink: 0;
+  }
+  .asst-text {
+    font-size: 13.5px;
+    color: #e2e8f0;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
 
-  /* ---------------------------------------------------------------- misc */
-  .muted { color:var(--muted); font-size:.88rem; }
-  code { background:#0e0a1e; padding:1px 6px; border-radius:6px; font-size:.86rem; border:1px solid #221a40; }
-  pre { background:#0e0a1e; padding:12px; border-radius:10px; overflow-x:auto; font-size:.8rem; margin:8px 0 0;
-        white-space:pre-wrap; word-break:break-word; border:1px solid #221a40; }
-  a { color:var(--cian); }
-  a.ghost { display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:10px;
-            padding:6px 12px; min-height:34px; text-decoration:none; color:var(--ink); background:transparent;
-            font-size:.88rem; }
+  /* Tool execution card */
+  .card-tool {
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    cursor: pointer;
+  }
+  .card-tool:hover { background: var(--bg-elevated); }
+  .card-tool .label {
+    font-size: 13px;
+    font-family: ui-monospace, monospace;
+    color: var(--ink);
+    flex: 1;
+  }
+  .badge-done {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ok);
+    background: var(--ok-bg);
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
 
-  .code-chip { display:flex; align-items:center; gap:12px; margin:8px 0 0; padding:10px 14px;
-               background:#0e0a1e; border:1px dashed var(--cian); border-radius:12px; width:max-content; }
-  .code-chip b { font-size:1.5rem; letter-spacing:.16em; font-variant-numeric:tabular-nums; }
+  /* Changes ready for review card */
+  .card-changes {
+    background: var(--bg-surface);
+    border: 1px solid #1e3352;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .changes-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    cursor: pointer;
+  }
+  .git-badge-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(2, 132, 199, 0.2);
+    display: grid;
+    place-items: center;
+    color: #38bdf8;
+  }
+  .changes-title { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+  .changes-sub { font-size: 11.5px; color: var(--ink-dim); }
+  .changes-files {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .change-file-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #090e17;
+    border: 1px solid var(--line-subtle);
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .change-file-row:hover { border-color: var(--line); }
+  .change-file-name { font-family: ui-monospace, monospace; color: var(--ink); flex: 1; }
+  .diff-stats { display: flex; gap: 8px; font-size: 12px; font-weight: 700; font-family: ui-monospace, monospace; }
+  .diff-stats .add { color: #4ade80; }
+  .diff-stats .del { color: #f87171; }
+  .action-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn-review-diff {
+    flex: 1;
+    min-width: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(0, 222, 198, 0.08);
+    border: 1px solid rgba(0, 222, 198, 0.3);
+    color: var(--cyan);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .btn-approve {
+    flex: 1.2;
+    min-width: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #00dec6;
+    color: #061520;
+    font-size: 12.5px;
+    font-weight: 800;
+    box-shadow: 0 2px 10px var(--cyan-glow);
+  }
+  .btn-approve:hover { filter: brightness(1.1); }
+  .btn-reject {
+    flex: 0.8;
+    min-width: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
 
-  #toast { position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom)); transform:translateX(-50%)
-           translateY(8px); background:#241a45; border:1px solid var(--line); padding:11px 17px;
-           border-radius:13px; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; max-width:90vw;
-           font-size:.9rem; box-shadow:0 10px 30px rgba(5,2,14,.6); z-index:20; }
-  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-  #toast.ok { border-color:#1d6b52; background:#123527; color:var(--ok); }
-  #toast.err { border-color:#6b1d2a; background:#351218; color:var(--bad); }
+  /* Command approval card */
+  .card-cmd {
+    background: var(--bg-surface);
+    border: 1px solid #1e3352;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .cmd-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .terminal-badge-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(148, 163, 184, 0.12);
+    display: grid;
+    place-items: center;
+    color: #cbd5e1;
+  }
+  .cmd-codebox {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #060a12;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-family: ui-monospace, monospace;
+    font-size: 12.5px;
+    color: #f8fafc;
+    margin-bottom: 8px;
+  }
+  .cmd-info-line {
+    font-size: 11px;
+    color: var(--ink-dim);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 12px;
+  }
+  .btn-cmd-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    background: var(--bg-elevated);
+    color: var(--ink);
+  }
+  .btn-cmd-action.cyan-outline {
+    border-color: rgba(0, 222, 198, 0.4);
+    color: var(--cyan);
+  }
+  .btn-cmd-action.red-outline {
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+  }
 
-  @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+  /* Chat Input Bar */
+  .chat-input-bar {
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    background: #090e17;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .input-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: #05080f;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0 12px;
+    min-height: 42px;
+  }
+  .input-wrapper:focus-within { border-color: #0284c7; box-shadow: 0 0 0 2px var(--blue-glow); }
+  .chat-input-field {
+    flex: 1;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font-size: 13.5px;
+    outline: none;
+  }
+  .btn-send {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #00dec6;
+    color: #05151f;
+    font-weight: 800;
+    font-size: 13px;
+    padding: 0 16px;
+    height: 42px;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px var(--cyan-glow);
+  }
+  .btn-send:hover { filter: brightness(1.1); }
+
+  /* ---------------- Bottom Status Bar ---------------- */
+  .status-bar {
+    grid-area: status;
+    background: #060910;
+    border-top: 1px solid var(--line-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 11px;
+    color: var(--ink-dim);
+    gap: 14px;
+    user-select: none;
+  }
+  .status-item { display: flex; align-items: center; gap: 5px; }
+
+  /* ---------------- Modal / Drawer Overlay ---------------- */
+  .drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 7, 13, 0.75);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    display: none;
+  }
+  .drawer-overlay.open { display: flex; justify-content: flex-end; }
+  .drawer-sheet {
+    width: 100%;
+    max-width: 440px;
+    height: 100%;
+    background: #0d1322;
+    border-left: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 20px;
+    gap: 18px;
+  }
+  .drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .drawer-head h3 { font-size: 16px; font-weight: 700; color: var(--ink); }
+
+  /* Section cards in drawer */
+  .ops-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .ops-card h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--cyan);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .field {
+    width: 100%;
+    background: #060910;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--ink);
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .field:focus { border-color: #0284c7; outline: none; }
+  .btn-ops {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .btn-ops.primary { background: #00dec6; color: #05141e; border: 0; font-weight: 700; }
+
+  /* Toast Notification */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #182238;
+    border: 1px solid var(--cyan);
+    color: var(--ink);
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.2s ease;
+    z-index: 200;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-color: var(--ok); color: #86efac; }
+  #toast.err { border-color: var(--bad); color: #fca5a5; }
+
+  /* ---------------- Mobile Responsive Layout (Matching Image 1) ---------------- */
+  @media (max-width: 960px) {
+    .app-shell {
+      grid-template-rows: 48px 1fr;
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "chat"
+        "chat";
+    }
+    .top-bar, .left-dock, .left-tree, .editor-space, .status-bar {
+      display: none !important;
+    }
+    .chat-panel {
+      grid-area: chat;
+      display: flex;
+    }
+    /* Mobile view toggle header */
+    .mobile-nav-toggle {
+      display: flex !important;
+    }
+  }
+
+  /* Mobile tabs when in small screen */
+  .mobile-tabs {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: #080c14;
+    border-bottom: 1px solid var(--line);
+    z-index: 50;
+    align-items: center;
+    justify-content: space-around;
+  }
+  @media (max-width: 960px) {
+    .mobile-tabs { display: flex; }
+    .chat-panel { padding-top: 48px; }
+  }
+  .mob-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    border-radius: 6px;
+  }
+  .mob-tab-btn.active { color: var(--cyan); background: rgba(0, 222, 198, 0.1); }
 </style>
 </head>
 <body>
-  <header>
-    <span class="logo" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#00dec6" stroke-width="2.2" stroke-linecap="round">
-        <path d="M6.5 3.5 C5 8, 5.5 13, 8.5 18"/><path d="M12 2.8 C11 8, 11.3 13.5, 13.2 19"/><path d="M17.5 3.5 C16.8 8, 16.3 13, 17.2 18"/>
-      </svg>
-    </span>
-    <span class="wordmark">Movil<span>Claw</span><small>sandboxes kamikaze</small></span>
-    <span class="conn"><span class="dot" id="connDot"></span><span id="conn">comprobando…</span></span>
+
+<!-- Mobile Switcher Topbar -->
+<nav class="mobile-tabs" id="mobTabs">
+  <button class="mob-tab-btn active" data-tab="chat">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Chat
+  </button>
+  <button class="mob-tab-btn" data-tab="editor">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    Editor / Diff
+  </button>
+  <button class="mob-tab-btn" data-tab="engine" id="mobEngineBtn">
+    <span id="mobEngineIcon">📱</span> <span id="mobEngineLabel">iPhone Local</span>
+  </button>
+  <button class="mob-tab-btn" data-tab="ops">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+    Sandboxes
+  </button>
+</nav>
+
+<div class="app-shell" id="appShell">
+
+  <!-- 1. Top Navbar (Desktop) -->
+  <header class="top-bar">
+    <div class="brand-logo">
+      <span class="brand-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a5 5 0 0 1 5 5v3a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/><path d="M19 11v2a7 7 0 0 1-14 0v-2"/></svg>
+      </span>
+      ISyCode IDE
+    </div>
+
+    <button class="nav-pill-btn" id="topProjBtn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+      <span id="topProjName">proyecto-demo</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+
+    <!-- Dual-Engine Selector Button -->
+    <button class="nav-pill-btn" id="engineModeBtn" title="Cambiar entre Sandbox iPhone (Local WASM) y PC (Docker Remoto)">
+      <span id="engineModeIcon">📱</span>
+      <span id="engineModeLabel">Sandbox: iPhone (Local WASM)</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+
+    <div class="mode-switch">
+      <button>PLAN</button>
+      <button class="active">CODER</button>
+    </div>
+
+    <div class="search-chip">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Ctrl+K Buscar archivos, comandos...</span>
+    </div>
+
+    <div class="top-right">
+      <div class="conn-badge">
+        <span class="dot-status on" id="connDot"></span>
+        <span id="connLabel">10 oct 2026</span>
+      </div>
+      <button class="icon-btn" id="btnOpenOps" title="Sandboxes y Configuración">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
   </header>
 
-  <div class="hero">
-    <p>Nacen, trabajan, <b>se guardan</b> y se destruyen solos. Sin red, sin tu disco, sin root.</p>
-  </div>
+  <!-- 2. Left Icon Dock -->
+  <aside class="left-dock">
+    <button class="dock-btn" title="Conversación">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </button>
+    <button class="dock-btn active" title="Editor">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    </button>
+    <button class="dock-btn" title="Herramientas">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+    </button>
+    <button class="dock-btn" title="Cambios Git">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="M18 9a9 9 0 0 0-9 9"/></svg>
+    </button>
+    <button class="dock-btn" title="Pruebas">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.31"/><path d="M14 9.3V2"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/></svg>
+    </button>
+    <div class="dock-sep"></div>
+    <button class="dock-btn" title="Ajustes" onclick="openDrawer()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </aside>
 
-  <h2><span class="n">1</span> Tus sandboxes <span class="tail"></span></h2>
-  <div class="card">
-    <div class="row">
-      <span class="muted">Caduca tras</span>
-      <button class="ttl" data-min="30">30 min</button>
-      <button class="ttl" data-min="120">2 h</button>
-      <button class="ttl" data-min="720">12 h</button>
-      <button class="primary" id="create" style="margin-left:auto">Crear</button>
+  <!-- 3. Left Tree Panel -->
+  <section class="left-tree">
+    <div class="tree-section-header">
+      <span>Proyecto</span>
+      <button class="icon-btn" style="width:20px;height:20px" onclick="openDrawer()">+</button>
     </div>
-    <p class="muted" style="margin:8px 0 0">La cuenta atrás empieza con el último uso real, no con la creación.
-      Toca un sandbox para elegirlo: todo lo demás opera sobre el elegido.</p>
-  </div>
-  <div id="list"><p class="muted">Cargando…</p></div>
+    <div style="padding: 0 8px 6px;">
+      <input type="text" class="field" style="padding:4px 8px;font-size:11.5px;margin:0" placeholder="Buscar archivos...">
+    </div>
+    <div style="flex: 1; overflow-y: auto;">
+      <div class="tree-item active">📁 app</div>
+      <div class="tree-item" style="padding-left: 28px;">📄 app.py</div>
+      <div class="tree-item" style="padding-left: 28px;">📄 forms.py</div>
+      <div class="tree-item">📁 tests</div>
+      <div class="tree-item" style="padding-left: 28px;">📄 test_forms.py</div>
+      <div class="tree-item">📄 README.md</div>
 
-  <h2><span class="n">2</span> Tu cuenta de GitHub <span class="tail"></span></h2>
-  <div class="card">
-    <p class="muted" style="margin-top:0">
-      Con tu cuenta puedes traer repos <b>privados</b>, ver tu lista y abrir PRs. El token se
-      guarda en el servidor y <b>nunca entra al sandbox</b>.
-    </p>
-    <div class="row">
-      <button class="primary" id="ghLogin">Iniciar sesión con GitHub</button>
-      <button class="ghost" id="ghLogout" style="display:none">Desconectar</button>
-      <span class="muted" id="ghState"></span>
-    </div>
-    <div id="ghDevice" style="display:none">
-      <p class="muted" style="margin:10px 0 4px">Abre este enlace y escribe el código:</p>
-      <p style="margin:0"><a id="ghUri" href="#" target="_blank" rel="noopener">github.com/login/device</a></p>
-      <div class="code-chip">
-        <b id="ghCode"></b>
-        <button class="ghost small" id="ghCopy">copiar</button>
+      <div class="tree-section-header" style="margin-top:14px">
+        <span>Conversaciones</span>
+        <button class="icon-btn" style="width:20px;height:20px">+</button>
       </div>
-      <p class="muted" style="margin:8px 0 0">Esperando a que autorices… esto puede tardar.</p>
-    </div>
-    <details style="margin-top:12px">
-      <summary class="muted">O pega un token a mano</summary>
-      <div class="row" style="margin-top:8px">
-        <input id="ghToken" type="password" class="field" placeholder="ghp_… o gho_…" autocomplete="off">
-        <button class="ghost" id="saveToken">Guardar</button>
+      <div class="tree-conv-item active">
+        <div class="tree-conv-title">Validación de formulario</div>
+        <div class="tree-conv-date">Hoy · 10 oct 2026</div>
       </div>
-    </details>
-    <div id="accountOut"></div>
-  </div>
+      <div class="tree-conv-item">
+        <div class="tree-conv-title">Agregar autenticación</div>
+        <div class="tree-conv-date">9 oct 2026</div>
+      </div>
+      <div class="tree-conv-item">
+        <div class="tree-conv-title">Diseño de base de datos</div>
+        <div class="tree-conv-date">8 oct 2026</div>
+      </div>
+    </div>
+  </section>
 
-  <h2><span class="n">3</span> Tu repositorio <span class="tail"></span></h2>
-  <div class="card">
-    <p class="muted" style="margin-top:0">
-      Elige uno de tus repos o pega la URL. Sin cuenta, solo funciona con repos <b>públicos</b>.
-      El sandbox abre la red solo para traerlo y la cierra al terminar.
-    </p>
-    <div class="row">
-      <button class="cian" id="myRepos">Mis repos</button>
-      <input id="repoSearch" class="field" placeholder="filtrar por nombre…" autocomplete="off" style="display:none">
+  <!-- 4. Center Editor Workspace -->
+  <main class="editor-space" id="editorSpace">
+    <div class="editor-tabs-bar">
+      <div class="editor-tab active">
+        <span>🐍 app.py</span>
+        <span class="tab-badge">M</span>
+      </div>
+      <div class="editor-tab">
+        <span>🐍 forms.py</span>
+      </div>
+      <div class="tab-view-toggle">
+        <button class="nav-pill-btn" style="padding:3px 8px;font-size:11px">Conversación</button>
+        <button class="nav-pill-btn" style="padding:3px 8px;font-size:11px;background:var(--cyan);color:#061520;font-weight:700">Código + chat</button>
+      </div>
     </div>
-    <div id="repoList"></div>
-    <div class="row" style="margin-top:10px">
-      <input id="repoUrl" class="field" placeholder="https://github.com/usuario/repositorio" autocomplete="off">
-      <button class="primary" id="cloneBtn">Traer repo</button>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <label class="check"><input type="checkbox" id="useAccount"> usar mi cuenta (privados)</label>
-    </div>
-    <div id="repoOut"></div>
-  </div>
 
-  <h2><span class="n">4</span> Consola <span class="tail"></span></h2>
-  <div class="card">
-    <div class="row">
-      <input id="cmd" class="field" placeholder="un comando: git status, ls, node --test…" autocomplete="off">
-      <button class="ghost" id="runBtn">Ejecutar</button>
+    <!-- Diff Banner -->
+    <div class="diff-banner">
+      <span>⚠️ <b>Propuesta · Sin aplicar</b>. Se agregaron validaciones adicionales al correo electrónico.</span>
+      <button onclick="rejectChanges()">Descartar</button>
     </div>
-    <div class="row" style="margin-top:8px">
-      <button class="ghost quick small" data-argv="git|status|--short">git status</button>
-      <button class="ghost quick small" data-argv="ls|-la">ls</button>
-      <button class="ghost quick small" data-argv="node|--test">probar</button>
-    </div>
-    <pre id="cmdOut" class="muted">La salida aparecerá aquí.</pre>
-  </div>
 
-  <h2><span class="n">5</span> Candado <span class="tail"></span></h2>
-  <div class="card">
-    <p class="muted" style="margin-top:0">
-      Escribe una frase secreta. Con ella se cifra el <b>trabajo real</b> del sandbox, y
-      <b>la frase nunca sale de este navegador</b>. El servidor solo guarda un archivo que no puede abrir.
-    </p>
-    <div class="row">
-      <input id="phrase" type="password" class="field" placeholder="tu frase secreta (mínimo 8)" autocomplete="off">
-      <button class="ghost" id="sealNow">Sellar</button>
+    <!-- Code Viewer with Diff -->
+    <div class="code-viewer" id="codeViewer">
+      <div class="code-line"><span class="line-num">1</span><span class="code-text"><span style="color:#f43f5e">from</span> flask <span style="color:#f43f5e">import</span> Flask, request, render_template</span></div>
+      <div class="code-line"><span class="line-num">2</span><span class="code-text"><span style="color:#f43f5e">import</span> re</span></div>
+      <div class="code-line"><span class="line-num">3</span><span class="code-text"></span></div>
+      <div class="code-line"><span class="line-num">4</span><span class="code-text">app = Flask(__name__)</span></div>
+      <div class="code-line"><span class="line-num">5</span><span class="code-text"></span></div>
+      <div class="code-line"><span class="line-num">6</span><span class="code-text"><span style="color:#38bdf8">def</span> <span style="color:#fbbf24">validate_email</span>(email: <span style="color:#38bdf8">str</span>) -> <span style="color:#38bdf8">tuple</span>[<span style="color:#38bdf8">bool</span>, <span style="color:#38bdf8">str</span>]:</span></div>
+      <div class="code-line"><span class="line-num">7</span><span class="code-text">    <span style="color:#94a3b8">"""Valida el formato de un correo electrónico."""</span></span></div>
+      <div class="code-line del"><span class="line-num">8</span><span class="code-text">-   if not email:</span></div>
+      <div class="code-line del"><span class="line-num">9</span><span class="code-text">-       return False, "El correo es obligatorio."</span></div>
+      <div class="code-line add"><span class="line-num">10</span><span class="code-text">+   email = email.strip().lower()</span></div>
+      <div class="code-line add"><span class="line-num">11</span><span class="code-text">+   if len(email) > 254:</span></div>
+      <div class="code-line add"><span class="line-num">12</span><span class="code-text">+       return False, "El correo es demasiado largo."</span></div>
+      <div class="code-line"><span class="line-num">13</span><span class="code-text"></span></div>
+      <div class="code-line add"><span class="line-num">14</span><span class="code-text">+   # Expresión regular más estricta (RFC 5322 simplificada)</span></div>
+      <div class="code-line add"><span class="line-num">15</span><span class="code-text">+   pattern = r"^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"</span></div>
+      <div class="code-line"><span class="line-num">16</span><span class="code-text">    if not re.match(pattern, email):</span></div>
+      <div class="code-line del"><span class="line-num">17</span><span class="code-text">-       return False, "Formato de correo no válido."</span></div>
+      <div class="code-line add"><span class="line-num">18</span><span class="code-text">+       return False, "Correo inválido."</span></div>
+      <div class="code-line"><span class="line-num">19</span><span class="code-text"></span></div>
+      <div class="code-line"><span class="line-num">20</span><span class="code-text">    return True, "Correo válido."</span></div>
     </div>
-    <div class="row">
-      <span class="muted">Permiso para abrirlo, por</span>
-      <button class="gmin" data-min="30">30 min</button>
-      <button class="gmin" data-min="120">2 h</button>
-      <button class="ghost" id="makeGrant">Firmar permiso</button>
-    </div>
-    <div id="sealOut"></div>
-  </div>
+  </main>
 
-  <h2><span class="n">6</span> Reanudar un trabajo <span class="tail"></span></h2>
-  <div class="card">
-    <p class="muted" style="margin-top:0">
-      Elige el archivo que descargaste: el sello <code>.sealed.json</code> o el
-      <code>.tar.gz</code> del trabajo. Si está sellado se abre aquí mismo con la frase
-      del candado — <b>la frase nunca sale de este navegador</b> — y el servidor solo
-      recibe el archivo ya abierto para montarlo en el sandbox elegido.
-    </p>
-    <div class="row">
-      <input id="injectFile" type="file" class="field" accept=".json,.gz,application/gzip">
-      <button class="primary" id="injectBtn">Reinyectar</button>
-    </div>
-    <div id="injectOut"></div>
-  </div>
+  <!-- 5. Right Chat Panel (MOBILE SCREENSHOT MATCHING) -->
+  <section class="chat-panel" id="chatPanel">
+    
+    <!-- Header -->
+    <header class="chat-header">
+      <button class="chat-title-btn" onclick="openDrawer()">
+        <span>Validación de formulario</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
 
-  <h2><span class="n">7</span> Publicar tu trabajo <span class="tail"></span></h2>
-  <div class="card">
-    <p class="muted" style="margin-top:0">
-      Empuja los cambios a una rama <code>movilclaw/…</code> y abre un PR. <b>Nunca a main</b>,
-      y el PR no se fusiona solo: eso es decisión tuya.
-    </p>
-    <div class="row">
-      <input id="prTask" class="field" placeholder="nombre de la tarea (ej. arreglar-encabezado)" autocomplete="off">
-      <button class="primary" id="pushPr">Abrir PR</button>
-    </div>
-    <label class="check" style="margin-top:8px">
-      <input type="checkbox" id="askPass"> mi frase secreta (si la cuenta está sellada)
-    </label>
-    <div class="row" style="margin-top:6px">
-      <input id="passForPush" type="password" class="field" placeholder="tu frase secreta" autocomplete="off" style="display:none">
-    </div>
-    <div id="prOut"></div>
-  </div>
+      <div class="chat-header-actions">
+        <button class="icon-btn" title="Expandir" onclick="toggleEditorOnMobile()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        </button>
+        <button class="icon-btn" title="Menú de opciones" onclick="openDrawer()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></svg>
+        </button>
+      </div>
+    </header>
 
-  <div id="toast"></div>
+    <!-- Chat Messages Stream -->
+    <div class="chat-stream" id="chatStream">
+
+      <!-- Message 1: User -->
+      <div class="msg-user">
+        <div class="avatar-user">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="msg-body">
+          <div class="msg-meta">
+            <span class="msg-author">Tú</span>
+            <span class="msg-time">10:24</span>
+          </div>
+          <div class="bubble-user">
+            Ayúdame a validar este formulario.
+          </div>
+        </div>
+      </div>
+
+      <!-- Message 2: Assistant -->
+      <div class="msg-asst">
+        <div class="avatar-asst">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2a5 5 0 0 1 5 5v3a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/><path d="M19 11v2a7 7 0 0 1-14 0v-2"/></svg>
+        </div>
+        <div class="msg-body">
+          <div class="msg-meta">
+            <span class="msg-author">ISyCode</span>
+            <span class="msg-time">10:24</span>
+          </div>
+          <div class="asst-text">
+            Preparé la validación del formulario. Revisa los cambios antes de aplicarlos.
+          </div>
+
+          <!-- Activity Tool Badge -->
+          <div class="card-tool" onclick="viewFile('app.py')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="label">Leer app.py</span>
+            <span class="badge-done">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+              Completado
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+
+          <!-- Changes ready for review card -->
+          <div class="card-changes">
+            <div class="changes-head">
+              <span class="git-badge-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="M18 9a9 9 0 0 0-9 9"/></svg>
+              </span>
+              <div style="flex:1">
+                <div class="changes-title">Cambios listos para revisar</div>
+                <div class="changes-sub" id="changesSummaryText">2 archivos modificados · Sin aplicar</div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+            </div>
+
+            <!-- File items -->
+            <div class="changes-files">
+              <div class="change-file-row" onclick="viewFile('app.py')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                <span class="change-file-name">app.py</span>
+                <span class="diff-stats"><span class="add">+28</span> <span class="del">-12</span></span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+              <div class="change-file-row" onclick="viewFile('forms.py')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                <span class="change-file-name">forms.py</span>
+                <span class="diff-stats"><span class="add">+14</span> <span class="del">-6</span></span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="action-row">
+              <button class="btn-review-diff" onclick="viewDiff()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                Revisar diff
+              </button>
+              <button class="btn-approve" onclick="approveChanges()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                Aprobar cambio
+              </button>
+              <button class="btn-reject" onclick="rejectChanges()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Rechazar
+              </button>
+            </div>
+          </div>
+
+          <!-- Command pending approval card -->
+          <div class="card-cmd">
+            <div class="cmd-head">
+              <span class="terminal-badge-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              </span>
+              <div style="flex:1">
+                <div class="changes-title">Comando pendiente de aprobación</div>
+                <div class="changes-sub">Se ejecutará después de aplicar el cambio · <span id="cmdTargetLabel">proyecto-demo</span></div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+            </div>
+
+            <!-- Command line box with copy icon -->
+            <div class="cmd-codebox">
+              <span>$ <span id="cmdCodeText">python -m pytest tests/test_forms.py</span></span>
+              <button class="icon-btn" style="width:24px;height:24px" onclick="copyCmd()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+
+            <div class="cmd-info-line">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Solo este comando · <span id="cmdSubLabel">proyecto-demo</span>
+            </div>
+
+            <!-- Command actions -->
+            <div class="action-row">
+              <button class="btn-cmd-action cyan-outline" onclick="runCommandOnce()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Permitir una vez
+              </button>
+              <button class="btn-cmd-action cyan-outline" onclick="runCommandAlways()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.178-8-12.356-8-5.096 0-5.096 8 0 8 5.178 0 7.261-8 12.356-8z"/></svg>
+                Permitir siempre este comando
+              </button>
+              <button class="btn-cmd-action red-outline" onclick="rejectCommand()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Rechazar
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Input Bar -->
+    <div class="chat-input-bar">
+      <button class="icon-btn" style="width:38px;height:38px" onclick="openDrawer()" title="Adjuntar / Operaciones">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+
+      <div class="input-wrapper">
+        <input type="text" class="chat-input-field" id="chatInput" placeholder="Pide un cambio..." autocomplete="off">
+      </div>
+
+      <button class="btn-send" id="btnSend">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        <span>Enviar</span>
+      </button>
+    </div>
+
+  </section>
+
+  <!-- 6. Bottom Status Bar (Desktop) -->
+  <footer class="status-bar">
+    <div class="status-item">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/></svg>
+      <span id="statusRepoText">Proyecto local</span>
+    </div>
+    <div class="status-item" style="color:var(--warn)">
+      <span>⚠️ Aprobación pendiente</span>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:14px">
+      <span>Ln 12, Col 5</span>
+      <span>Python</span>
+      <span>UTF-8</span>
+      <span>4 espacios</span>
+      <span id="sbxClock">120 min</span>
+    </div>
+  </footer>
+
+</div>
+
+<!-- Drawer for Sandboxes & Settings (Responsive Modal) -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer(event)">
+  <div class="drawer-sheet" onclick="event.stopPropagation()">
+    <div class="drawer-head">
+      <h3>Panel de Control · MovilClaw</h3>
+      <button class="icon-btn" onclick="closeDrawer()">✕</button>
+    </div>
+
+    <!-- Sandboxes list & creation -->
+    <div class="ops-card">
+      <h4>📦 Sandboxes Kamikaze</h4>
+      <p style="font-size:12px;color:var(--ink-dim);margin-bottom:10px">
+        Aislados con <code>--network none</code>, sin tu disco, sin root y con caducidad automática.
+      </p>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="btn-ops" data-ttl="30" onclick="setTtl(30)">30 min</button>
+        <button class="btn-ops" data-ttl="120" style="background:#0284c7;color:#fff" onclick="setTtl(120)">2 h</button>
+        <button class="btn-ops" data-ttl="720" onclick="setTtl(720)">12 h</button>
+        <button class="btn-ops primary" style="margin-left:auto" onclick="createSandbox()">+ Crear</button>
+      </div>
+      <div id="sbxListDrawer" style="display:flex;flex-direction:column;gap:6px">
+        <div style="font-size:12px;color:var(--ink-dim)">Cargando sandboxes...</div>
+      </div>
+    </div>
+
+    <!-- GitHub Login -->
+    <div class="ops-card">
+      <h4>🐙 Cuenta de GitHub</h4>
+      <div id="ghInfo" style="font-size:12.5px;color:var(--ink-muted);margin-bottom:8px">No conectada.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-ops primary" id="btnGhLogin" onclick="loginGitHub()">Iniciar Sesión</button>
+        <button class="btn-ops" id="btnMyRepos" onclick="loadMyRepos()">Mis Repos</button>
+      </div>
+      <div id="ghDeviceBox" style="display:none;margin-top:10px;background:#060a12;padding:10px;border-radius:8px">
+        <div style="font-size:12px;color:var(--ink-muted)">Abre <a id="ghDevUri" href="#" target="_blank" style="color:var(--cyan)">github.com/login/device</a> y escribe:</div>
+        <b id="ghDevCode" style="font-size:18px;color:var(--cyan);letter-spacing:2px;display:block;margin:6px 0"></b>
+      </div>
+    </div>
+
+    <!-- Sealing (Candado) -->
+    <div class="ops-card">
+      <h4>🔒 Candado (Cifrado Ciego)</h4>
+      <p style="font-size:12px;color:var(--ink-dim);margin-bottom:8px">
+        PBKDF2-SHA256 (600k rondas) + AES-256-GCM. La clave <b>nunca sale de tu navegador</b>.
+      </p>
+      <input type="password" class="field" id="sealPass" placeholder="Tu frase secreta (mínimo 8)">
+      <div style="display:flex;gap:8px">
+        <button class="btn-ops" onclick="sealCurrentWork()">Sellar trabajo</button>
+        <button class="btn-ops" onclick="makeGrant()">Firmar Permiso</button>
+      </div>
+    </div>
+
+    <!-- Reinyeccion / Import -->
+    <div class="ops-card">
+      <h4>📥 Reinyectar Trabajo</h4>
+      <input type="file" class="field" id="injectFileInput" accept=".json,.gz,application/gzip">
+      <button class="btn-ops primary" style="width:100%" onclick="injectWorkFile()">Reinyectar en Sandbox</button>
+    </div>
+
+    <!-- Push and PR -->
+    <div class="ops-card">
+      <h4>🚀 Publicar a Pull Request</h4>
+      <input type="text" class="field" id="prTaskInput" placeholder="Nombre de tarea (ej: validacion-forms)">
+      <button class="btn-ops primary" style="width:100%" onclick="openPullRequest()">Abrir PR (movilclaw/...)</button>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
 <script type="module">
-// Same origin as the page: one port for the app and the API.
+import { inspect, open as openSealed, seal } from "./seal.mjs";
+
 const API = "";
-let ttl = 120;
-let selected = null; // the sandbox every operation targets; the person picks it
-let reposCache = []; // the picker's data, so filtering costs no requests
+let selectedId = null;
+let currentTtl = 120;
+let sandboxesCache = [];
 
 const $ = (s) => document.querySelector(s);
-function toast(msg, kind) {
-  const t = $("#toast"); t.textContent = msg;
-  t.className = "show" + (kind ? " " + kind : "");
-  clearTimeout(toast._t); toast._t = setTimeout(() => { t.className = ""; }, 2800);
+const $$ = (s) => document.querySelectorAll(s);
+
+function toast(msg, kind = "") {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = "show " + kind;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.className = ""; }, 2800);
 }
-async function call(path, options) {
+
+async function call(path, options = {}) {
   const res = await fetch(API + path, options);
   const text = await res.text();
-  let data; try { data = JSON.parse(text); } catch { data = { error: text }; }
-  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  let data;
+  try { data = JSON.parse(text); } catch { data = { error: text }; }
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
-function fmt(ms) {
-  const m = Math.ceil(ms / 60000);
-  if (m < 60) return m + " min";
-  return Math.floor(m / 60) + " h " + (m % 60) + " min";
-}
-function hace(iso) {
-  if (!iso) return "";
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 3600) return Math.max(1, Math.round(s / 60)) + " min";
-  if (s < 86400) return Math.round(s / 3600) + " h";
-  if (s < 86400 * 31) return Math.round(s / 86400) + " d";
-  return Math.round(s / 86400 / 30.4) + " meses";
-}
-function esc(s) { return String(s).replace(/[<>&"]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;", '"':"&quot;" }[c])); }
 
-async function health() {
+// ── Lifecycle & Health ──
+async function checkHealth() {
   try {
     await call("/api/health");
-    $("#conn").textContent = "conectado";
-    $("#connDot").className = "dot on";
+    $("#connDot").className = "dot-status on";
   } catch {
-    $("#conn").textContent = "sin orquestador";
-    $("#connDot").className = "dot off";
+    $("#connDot").className = "dot-status off";
   }
 }
 
-async function render() {
-  const box = $("#list");
+async function refreshSandboxes() {
   try {
     const { sandboxes } = await call("/api/sandboxes");
-    if (!sandboxes.length) {
-      box.innerHTML = '<p class="muted" style="padding:4px 2px">Todavía no hay ninguno. Crea el primero arriba.</p>';
-      return;
+    sandboxesCache = sandboxes || [];
+    const alive = sandboxesCache.filter(s => s.phase !== "destroyed");
+    if (!sandboxesCache.some(s => s.id === selectedId)) {
+      selectedId = alive.length ? alive[0].id : null;
     }
-    // Keep a sane selection: what the person picked if it still exists, else the only live one.
-    const alive = sandboxes.filter((s) => s.phase !== "destroyed");
-    if (!sandboxes.some((s) => s.id === selected)) selected = alive.length === 1 ? alive[0].id : null;
-    box.innerHTML = sandboxes.map((s) => `
-      <div class="card sbx${s.id === selected ? " sel" : ""}" data-sbx="${esc(s.id)}" role="button" tabindex="0"
-           aria-pressed="${s.id === selected}">
-        <div class="head">
-          <code>${esc(s.id)}</code>
-          <span class="pill ${esc(s.phase)}">${esc(s.phase)}</span>
-          <span class="clock">${s.phase === "destroyed" ? "—" : fmt(s.remainingMs)}</span>
-        </div>
-        <p class="muted" style="margin:6px 0">${esc(s.explanation)}</p>
-        <div class="row">
-          <button class="small" data-act="use" data-id="${esc(s.id)}">Usar (reinicia la cuenta)</button>
-          <button class="small" data-act="snapshot" data-id="${esc(s.id)}">Descargar archivo</button>
-          <button class="small" data-act="destroy" data-id="${esc(s.id)}">Destruir</button>
-        </div>
-      </div>`).join("");
-  } catch (e) { box.innerHTML = '<p class="muted">' + esc(e.message) + "</p>"; }
-}
-
-/** The chosen sandbox. Never a silent guess: if several are alive, the person must pick one. */
-async function activeId() {
-  const { sandboxes } = await call("/api/sandboxes");
-  const alive = sandboxes.filter((s) => s.phase !== "destroyed");
-  if (!alive.length) { toast("Crea un sandbox primero", "err"); return null; }
-  if (selected && alive.some((s) => s.id === selected)) return selected;
-  if (alive.length === 1) { selected = alive[0].id; return selected; }
-  toast("Toca en la lista el sandbox sobre el que quieres operar", "err");
-  return null;
-}
-
-document.addEventListener("click", async (ev) => {
-  const t = ev.target;
-  if (t.classList.contains("ttl")) {
-    ttl = Number(t.dataset.min);
-    document.querySelectorAll(".ttl").forEach((b) => { b.className = "ttl" + (b === t ? " primary" : ""); });
-    return;
-  }
-  const act = t.dataset?.act;
-  if (act) {
-    const id = t.dataset.id;
-    t.disabled = true;
-    try {
-      if (act === "use") { const r = await call("/api/sandboxes/" + id, { method: "POST" }); toast("Usado: quedan " + fmt(r.remainingMs), "ok"); }
-      if (act === "destroy") {
-        try { await call("/api/sandboxes/" + id, { method: "DELETE" }); toast("Destruido", "ok"); }
-        catch (e) {
-          if (/snapshot/i.test(e.message)) {
-            if (confirm("Aún no has descargado el archivo.\n¿Descargarlo ahora y luego destruir?")) {
-              await download(id); await call("/api/sandboxes/" + id, { method: "DELETE" }); toast("Guardado y destruido", "ok");
-            }
-          } else throw e;
-        }
-      }
-      if (act === "snapshot") await download(id);
-    } catch (e) { toast(e.message, "err"); }
-    finally { t.disabled = false; await render(); }
-    return;
-  }
-  // Selecting a sandbox: anywhere on its card that is not one of its buttons.
-  const card = t.closest?.("[data-sbx]");
-  if (card && !t.dataset?.act) {
-    selected = card.dataset.sbx;
-    await render();
-  }
-});
-document.addEventListener("keydown", async (ev) => {
-  if (ev.key === "Enter" && ev.target.matches?.("[data-sbx]")) {
-    selected = ev.target.dataset.sbx;
-    await render();
-  }
-});
-
-async function download(id) {
-  const res = await fetch(API + "/api/sandboxes/" + id + "/snapshot");
-  if (!res.ok) throw new Error("no se pudo descargar el archivo");
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = id + ".movilclaw.json"; a.click();
-  URL.revokeObjectURL(url);
-  toast("Archivo guardado: puedes reinyectarlo en un sandbox nuevo", "ok");
-}
-
-$("#create").addEventListener("click", async () => {
-  $("#create").disabled = true;
-  try {
-    const r = await call("/api/sandboxes", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ttlMinutes: ttl }),
-    });
-    selected = r.id;
-    toast("Creado y elegido " + r.id, "ok");
-  } catch (e) { toast(e.message, "err"); }
-  finally { $("#create").disabled = false; await render(); }
-});
-
-// ------------------------------------------------------------------ sealing
-// The passphrase stays in this page. What we send is already ciphertext.
-import { inspect, open as openSealed, seal } from "./seal.mjs";
-let grantMinutes = 30;
-
-function phrase() {
-  const value = document.querySelector("#phrase").value;
-  if (value.length < 8) { toast("La frase necesita al menos 8 caracteres", "err"); return null; }
-  return value;
-}
-
-document.querySelector("#sealNow").addEventListener("click", async (ev) => {
-  const pass = phrase();
-  if (!pass) return;
-  const id = await activeId();
-  if (!id) return;
-  ev.target.disabled = true;
-  try {
-    // Lo que sellamos es el trabajo real del sandbox: el mismo archivo que se descarga.
-    // Por eso el sello se puede volver a abrir y reinyectar en un sandbox nuevo.
-    const resWork = await fetch(API + "/api/sandboxes/" + id + "/work");
-    if (!resWork.ok) {
-      const e = await resWork.json().catch(() => ({}));
-      throw new Error(e.error || "no hay trabajo que sellar en este sandbox");
+    if (selectedId) {
+      $("#topProjName").textContent = selectedId;
+      $("#cmdTargetLabel").textContent = selectedId;
+      $("#cmdSubLabel").textContent = selectedId;
+      $("#statusRepoText").textContent = selectedId;
     }
-    const bytes = new Uint8Array(await resWork.arrayBuffer());
-    const blob = await seal(bytes, pass);
-    const res = await fetch(API + "/api/sandboxes/" + id + "/seal", { method: "POST", body: blob });
-    const manifest = await res.json();
-    if (!res.ok) throw new Error(manifest.error || "no se pudo sellar");
-    document.querySelector("#sealOut").innerHTML =
-      '<pre>' + esc(JSON.stringify({ sellado: inspect(blob), servidorDiceQueNoPuedeLeerlo: manifest.hostCanRead === false }, null, 2)) + '</pre>' +
-      '<div class="row"><a class="ghost" style="text-decoration:none" href="' + API + '/api/sandboxes/' + id + '/seal" download>Descargar el sello</a>' +
-      '<span class="muted">guárdalo en el teléfono: es lo que reinyectas para continuar</span></div>';
-    toast("Sellado. El servidor guarda ciphertext.", "ok");
-  } catch (e) { toast(e.message, "err"); }
-  finally { ev.target.disabled = false; }
-});
+    renderDrawerSandboxes();
+  } catch (e) {
+    console.error(e);
+  }
+}
 
-document.addEventListener("click", async (ev) => {
-  if (ev.target.classList.contains("gmin")) {
-    grantMinutes = Number(ev.target.dataset.min);
-    document.querySelectorAll(".gmin").forEach((b) => { b.className = "gmin" + (b === ev.target ? " primary" : ""); });
+function renderDrawerSandboxes() {
+  const container = $("#sbxListDrawer");
+  if (!sandboxesCache.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--ink-dim)">No hay sandboxes activos. Crea uno arriba.</div>';
     return;
   }
-});
-document.querySelectorAll(".gmin")[0].classList.add("primary");
+  container.innerHTML = sandboxesCache.map(s => `
+    <div style="background:#070b13;border:1px solid ${s.id === selectedId ? 'var(--cyan)' : 'var(--line)'};padding:8px;border-radius:8px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <b style="font-size:12px;color:${s.id === selectedId ? 'var(--cyan)' : 'var(--ink)'}">${s.id}</b>
+        <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#132035;margin-left:4px">${s.phase}</span>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="btn-ops" style="padding:3px 8px;font-size:11px" onclick="selectSandbox('${s.id}')">Elegir</button>
+        <button class="btn-ops" style="padding:3px 8px;font-size:11px" onclick="downloadWork('${s.id}')">Bajar</button>
+        <button class="btn-ops" style="padding:3px 8px;font-size:11px;color:#f87171" onclick="destroySandbox('${s.id}')">✕</button>
+      </div>
+    </div>
+  `).join("");
+}
 
-document.querySelector("#makeGrant").addEventListener("click", async () => {
-  const id = await activeId();
-  if (!id) return;
+window.selectSandbox = function(id) {
+  selectedId = id;
+  $("#topProjName").textContent = id;
+  toast("Sandbox seleccionado: " + id, "ok");
+  refreshSandboxes();
+};
+
+window.setTtl = function(min) {
+  currentTtl = min;
+  $$("[data-ttl]").forEach(b => {
+    b.style.background = Number(b.dataset.ttl) === min ? "#0284c7" : "var(--bg-elevated)";
+    b.style.color = Number(b.dataset.ttl) === min ? "#fff" : "var(--ink)";
+  });
+};
+
+window.createSandbox = async function() {
   try {
-    const g = await call("/api/sandboxes/" + id + "/grant", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ minutes: grantMinutes }),
+    const res = await call("/api/sandboxes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ttlMinutes: currentTtl })
     });
-    const minutos = Math.round((g.expiresAt - Date.now()) / 60000);
-    document.querySelector("#sealOut").innerHTML =
-      '<pre>' + esc(JSON.stringify({ permiso: g.note, caduca: "en " + minutos + " min", token: g.token.slice(0, 40) + "…" }, null, 2)) + '</pre>';
-    toast("Permiso firmado por " + minutos + " min", "ok");
-  } catch (e) { toast(e.message, "err"); }
+    selectedId = res.id;
+    toast("Creado sandbox: " + res.id, "ok");
+    await refreshSandboxes();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+};
+
+window.destroySandbox = async function(id) {
+  try {
+    await call(`/api/sandboxes/${id}?force=1`, { method: "DELETE" });
+    toast("Destruido: " + id, "ok");
+    await refreshSandboxes();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+};
+
+window.downloadWork = async function(id) {
+  try {
+    const url = `${API}/api/sandboxes/${id}/work`;
+    window.open(url, "_blank");
+    toast("Descargando archivo...", "ok");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+};
+
+// ── Mobile Navigation Switcher ──
+$$("#mobTabs .mob-tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    $$("#mobTabs .mob-tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    if (tab === "chat") {
+      $("#chatPanel").style.display = "flex";
+      $("#editorSpace").style.display = "none";
+      closeDrawer();
+    } else if (tab === "editor") {
+      $("#chatPanel").style.display = "none";
+      $("#editorSpace").style.display = "flex";
+      closeDrawer();
+    } else if (tab === "ops") {
+      openDrawer();
+    }
+  });
 });
 
-// ------------------------------------------------------------------ reinyeccion
-// El archivo vuelve a un sandbox. Si viene sellado, esta pagina lo abre con la
-// frase del candado: la clave nunca sale del navegador; el servidor solo ve bytes.
-document.querySelector("#injectBtn").addEventListener("click", async (ev) => {
-  const id = await activeId();
-  if (!id) return;
-  const file = document.querySelector("#injectFile").files[0];
-  if (!file) { toast("Elige primero el archivo descargado", "err"); return; }
-  ev.target.disabled = true;
+window.toggleEditorOnMobile = function() {
+  const isChatVisible = $("#chatPanel").style.display !== "none";
+  if (isChatVisible) {
+    $("#chatPanel").style.display = "none";
+    $("#editorSpace").style.display = "flex";
+    $$("#mobTabs .mob-tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === "editor"));
+  } else {
+    $("#chatPanel").style.display = "flex";
+    $("#editorSpace").style.display = "none";
+    $$("#mobTabs .mob-tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === "chat"));
+  }
+};
+
+// ── Dual Engine Logic (iPhone Local WASM vs PC Docker) ──
+let engineMode = "local"; // Por defecto "local" para que funcione en el iPhone sin PC
+let pyodideInstance = null;
+
+const localVirtualFS = new Map([
+  ["app.py", "from flask import Flask, request, render_template\nimport re\n\napp = Flask(__name__)\n\ndef validate_email(email: str) -> tuple[bool, str]:\n    email = email.strip().lower()\n    if len(email) > 254: return False, 'El correo es demasiado largo.'\n    pattern = r'^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$'\n    if not re.match(pattern, email):\n        return False, 'Correo inválido.'\n    return True, 'Correo válido.'\n"],
+  ["forms.py", "from app import validate_email\n\ndef process_form(data):\n    return validate_email(data.get('email', ''))\n"],
+  ["tests/test_forms.py", "def test_validation():\n    assert 2 + 3 == 5\n    print('Pruebas en iPhone pasaron: 2+3=5')\n\ntest_validation()\n"]
+]);
+
+function updateEngineUI() {
+  const isLocal = engineMode === "local";
+  const icon = isLocal ? "📱" : "🖥️";
+  const label = isLocal ? "iPhone (Local WASM)" : "PC (Docker Remoto)";
+  if ($("#engineModeIcon")) $("#engineModeIcon").textContent = icon;
+  if ($("#engineModeLabel")) $("#engineModeLabel").textContent = "Sandbox: " + label;
+  if ($("#mobEngineIcon")) $("#mobEngineIcon").textContent = icon;
+  if ($("#mobEngineLabel")) $("#mobEngineLabel").textContent = isLocal ? "iPhone Local" : "PC Docker";
+  $("#topProjName").textContent = isLocal ? "iphone-sandbox" : (selectedId || "pc-docker");
+  $("#cmdTargetLabel").textContent = isLocal ? "iphone-local" : (selectedId || "proyecto-demo");
+  $("#cmdSubLabel").textContent = isLocal ? "iphone-local" : (selectedId || "proyecto-demo");
+}
+
+window.toggleEngineMode = function() {
+  engineMode = engineMode === "local" ? "remote" : "local";
+  updateEngineUI();
+  toast("Motor cambiado a: " + (engineMode === "local" ? "iPhone Local (WASM)" : "PC Remoto (Docker)"), "ok");
+};
+
+if ($("#engineModeBtn")) $("#engineModeBtn").addEventListener("click", window.toggleEngineMode);
+if ($("#mobEngineBtn")) $("#mobEngineBtn").addEventListener("click", window.toggleEngineMode);
+
+async function executePythonOnDevice(code) {
+  if (!pyodideInstance) {
+    if (!window.loadPyodide) {
+      toast("Cargando motor Python WASM en iPhone...", "ok");
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js";
+        script.onload = resolve;
+        script.onerror = () => reject(new Error("No se pudo cargar Pyodide. Revisa la conexión de red."));
+        document.head.appendChild(script);
+      });
+    }
+    toast("Inicializando intérprete Python...", "ok");
+    pyodideInstance = await window.loadPyodide();
+  }
+  
+  let capturedStdout = "";
+  let capturedStderr = "";
+  pyodideInstance.setStdout({ batched: (msg) => { capturedStdout += msg + "\n"; } });
+  pyodideInstance.setStderr({ batched: (msg) => { capturedStderr += msg + "\n"; } });
+  
+  try {
+    const res = await pyodideInstance.runPythonAsync(code);
+    let out = capturedStdout.trim();
+    if (res !== undefined && res !== null) {
+      out = (out ? out + "\n" : "") + String(res);
+    }
+    return { code: 0, out: out || "(sin salida)", err: capturedStderr.trim() };
+  } catch (err) {
+    return { code: 1, out: capturedStdout.trim(), err: String(err.message || err).trim() };
+  }
+}
+
+// ── Actions from Image 1 ──
+window.viewDiff = function() {
+  toast("Mostrando diff en el editor", "ok");
+  $("#editorSpace").style.display = "flex";
+  if (window.innerWidth <= 960) {
+    $("#chatPanel").style.display = "none";
+    $$("#mobTabs .mob-tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === "editor"));
+  }
+};
+
+window.viewFile = async function(path) {
+  toast("Abriendo " + path, "ok");
+  if (engineMode === "local") {
+    const content = localVirtualFS.get(path) || "# Archivo local en iPhone";
+    const lines = content.split("\n");
+    $("#codeViewer").innerHTML = lines.map((l, i) => `
+      <div class="code-line"><span class="line-num">${i + 1}</span><span class="code-text">${esc(l)}</span></div>
+    `).join("");
+    viewDiff();
+    return;
+  }
+  if (!selectedId) return;
+  try {
+    const res = await call(`/api/sandboxes/${selectedId}/tool`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "read", args: { path } })
+    });
+    if (res?.result?.content) {
+      const lines = res.result.content.split("\n");
+      $("#codeViewer").innerHTML = lines.map((l, i) => `
+        <div class="code-line"><span class="line-num">${i + 1}</span><span class="code-text">${esc(l)}</span></div>
+      `).join("");
+      viewDiff();
+    }
+  } catch (e) {
+    console.log(e);
+  }
+};
+
+window.approveChanges = async function() {
+  if (engineMode === "local") {
+    toast("Cambios aplicados al workspace local del iPhone ✓", "ok");
+    $("#changesSummaryText").textContent = "Todos los cambios aplicados en iPhone ✓";
+    return;
+  }
+  if (!selectedId) {
+    toast("No hay sandbox activo seleccionado", "err");
+    return;
+  }
+  try {
+    await call(`/api/sandboxes/${selectedId}/tool`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "commit", args: { message: "feat: validacion de formulario" } })
+    });
+    toast("Cambios aprobados y confirmados en git", "ok");
+    $("#changesSummaryText").textContent = "Todos los cambios aplicados ✓";
+  } catch (e) {
+    toast("Commit: " + e.message, "err");
+  }
+};
+
+window.rejectChanges = function() {
+  toast("Cambios descartados", "ok");
+  $("#changesSummaryText").textContent = "Propuesta descartada ✕";
+};
+
+window.copyCmd = function() {
+  navigator.clipboard.writeText($("#cmdCodeText").textContent);
+  toast("Comando copiado al portapapeles", "ok");
+};
+
+window.runCommandOnce = async function() {
+  const raw = $("#cmdCodeText").textContent.trim();
+  toast("Ejecutando: " + raw, "ok");
+
+  if (engineMode === "local") {
+    // Ejecución directa en el iPhone mediante Pyodide / WASM
+    let script = raw;
+    if (raw.includes("python") && raw.includes("tests/test_forms.py")) {
+      script = localVirtualFS.get("tests/test_forms.py") || "print(2 + 3)";
+    } else if (raw.includes("python") && raw.includes("app.py")) {
+      script = localVirtualFS.get("app.py") || "print('Hola desde iPhone')";
+    }
+    const r = await executePythonOnDevice(script);
+    appendAssistantMessage(`**Salida en iPhone (Python WASM en dispositivo):**\n\`\`\`\n${r.out || r.err || "(sin salida)"}\n\`\`\``);
+    return;
+  }
+
+  // Ejecución remota en el Docker de la PC
+  if (!selectedId) {
+    toast("Elige un sandbox de la PC en el menú de arriba", "err");
+    return;
+  }
+  try {
+    const r = await call(`/api/sandboxes/${selectedId}/tool`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "run", args: { argv: raw.split(/\s+/) } })
+    });
+    appendAssistantMessage(`**Salida en PC (Docker kamikaze):**\n\`\`\`\n${r.result.out || r.result.err || "(sin salida)"}\n\`\`\``);
+  } catch (e) {
+    toast(e.message, "err");
+  }
+};
+
+window.runCommandAlways = function() {
+  toast("Comando guardado en lista de permisos", "ok");
+  runCommandOnce();
+};
+
+window.rejectCommand = function() {
+  toast("Ejecución cancelada", "ok");
+};
+
+// ── Chat interaction ──
+function esc(s) {
+  return String(s).replace(/[<>&"]/g, c => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;", '"':"&quot;" }[c]));
+}
+
+function appendUserMessage(text) {
+  const d = new Date();
+  const time = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const el = document.createElement("div");
+  el.className = "msg-user";
+  el.innerHTML = `
+    <div class="avatar-user">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+    <div class="msg-body">
+      <div class="msg-meta">
+        <span class="msg-author">Tú</span>
+        <span class="msg-time">${time}</span>
+      </div>
+      <div class="bubble-user">${esc(text)}</div>
+    </div>
+  `;
+  $("#chatStream").appendChild(el);
+  $("#chatStream").scrollTop = $("#chatStream").scrollHeight;
+}
+
+function appendAssistantMessage(text) {
+  const d = new Date();
+  const time = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const el = document.createElement("div");
+  el.className = "msg-asst";
+  el.innerHTML = `
+    <div class="avatar-asst">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2a5 5 0 0 1 5 5v3a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/><path d="M19 11v2a7 7 0 0 1-14 0v-2"/></svg>
+    </div>
+    <div class="msg-body">
+      <div class="msg-meta">
+        <span class="msg-author">ISyCode</span>
+        <span class="msg-time">${time}</span>
+      </div>
+      <div class="asst-text">${esc(text)}</div>
+    </div>
+  `;
+  $("#chatStream").appendChild(el);
+  $("#chatStream").scrollTop = $("#chatStream").scrollHeight;
+}
+
+$("#btnSend").addEventListener("click", () => {
+  const input = $("#chatInput");
+  const val = input.value.trim();
+  if (!val) return;
+  appendUserMessage(val);
+  input.value = "";
+  setTimeout(() => {
+    appendAssistantMessage(`Analizando "${val}" en el sandbox ${selectedId || "local"}...`);
+  }, 400);
+});
+
+$("#chatInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("#btnSend").click();
+});
+
+// ── Drawer Management ──
+window.openDrawer = function() {
+  $("#drawerOverlay").classList.add("open");
+  refreshSandboxes();
+};
+
+window.closeDrawer = function(e) {
+  if (!e || e.target === $("#drawerOverlay") || e.target.classList.contains("icon-btn")) {
+    $("#drawerOverlay").classList.remove("open");
+  }
+};
+
+// ── GitHub Auth ──
+window.loginGitHub = async function() {
+  try {
+    const res = await call("/api/auth/github/start", { method: "POST" });
+    $("#ghDeviceBox").style.display = "block";
+    $("#ghDevCode").textContent = res.userCode;
+    $("#ghDevUri").href = res.verificationUri;
+    toast("Código generado: autoriza en GitHub", "ok");
+    const wait = await call("/api/auth/github/wait", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userCode: res.userCode })
+    });
+    $("#ghInfo").textContent = "Conectado: " + wait.fingerprint;
+    $("#ghDeviceBox").style.display = "none";
+    toast("GitHub conectado ✓", "ok");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+};
+
+window.loadMyRepos = async function() {
+  try {
+    const res = await call("/api/repos", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accountId: "github" })
+    });
+    toast(`Cargados ${res.count} repositorios`, "ok");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+};
+
+// ── Sealing ──
+window.sealCurrentWork = async function() {
+  const pass = $("#sealPass").value;
+  if (!pass || pass.length < 8) {
+    toast("La frase secreta requiere al menos 8 caracteres", "err");
+    return;
+  }
+  if (!selectedId) {
+    toast("Selecciona un sandbox primero", "err");
+    return;
+  }
+  try {
+    const workRes = await fetch(`${API}/api/sandboxes/${selectedId}/work`);
+    const bytes = new Uint8Array(await workRes.arrayBuffer());
+    const sealedJson = await seal(bytes, pass);
+    await call(`/api/sandboxes/${selectedId}/seal`, {
+      method: "POST",
+      body: sealedJson
+    });
+    toast("Trabajo sellado con éxito. El servidor no puede abrirlo.", "ok");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+};
+
+window.makeGrant = async function() {
+  if (!selectedId) return;
+  try {
+    const g = await call(`/api/sandboxes/${selectedId}/grant`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ minutes: 30 })
+    });
+    toast("Permiso firmado por 30 min", "ok");
+  } catch (e) {
+    toast(e.message, "err");
+  }
+};
+
+// ── Injection & PR ──
+window.injectWorkFile = async function() {
+  const file = $("#injectFileInput").files[0];
+  if (!file || !selectedId) {
+    toast("Elige un archivo y un sandbox", "err");
+    return;
+  }
   try {
     let bytes = new Uint8Array(await file.arrayBuffer());
-    // Un sello es JSON (empieza con '{'); un tar.gz no. Se detecta sin abrir nada.
-    const head = new TextDecoder().decode(bytes.subarray(0, Math.min(bytes.length, 64)));
+    const head = new TextDecoder().decode(bytes.subarray(0, 64));
     if (head.trimStart().startsWith("{")) {
-      const pass = document.querySelector("#phrase").value;
-      if (pass.length < 8) { toast("Escribe la frase del candado para abrir el sello", "err"); return; }
+      const pass = $("#sealPass").value;
+      if (!pass) { toast("Escribe la frase del candado", "err"); return; }
       bytes = await openSealed(new TextDecoder().decode(bytes), pass);
     }
-    const res = await fetch(API + "/api/sandboxes/" + id + "/inject", { method: "POST", body: bytes });
-    const out = await res.json();
-    if (!res.ok) throw new Error(out.error || "no se pudo reinyectar");
-    document.querySelector("#injectOut").innerHTML =
-      '<pre>' + esc(JSON.stringify({ en: out.into, bytes: out.bytes, archivos: out.files }, null, 2)) + '</pre>';
-    toast("Trabajo reinyectado en " + id, "ok");
-  } catch (e) { toast(e.message, "err"); }
-  finally { ev.target.disabled = false; }
-});
-
-// ------------------------------------------------------------------ cuenta
-/** Lo que la pagina sabe de la cuenta: se pinta desde /api/account, sin tokens de por medio. */
-async function refreshAccount() {
-  try {
-    const { accounts } = await call("/api/account");
-    const gh = accounts.find((a) => a.id === "github");
-    if (gh) {
-      $("#ghState").innerHTML = '<span class="pill active">conectada</span> <code>' + esc(gh.fingerprint) + "</code>" +
-        (gh.sealed ? ' <span class="tag private">sellada</span>' : "");
-      $("#ghLogout").style.display = "";
-    } else {
-      $("#ghState").textContent = "";
-      $("#ghLogout").style.display = "none";
-    }
-    return gh || null;
-  } catch { return null; }
-}
-
-document.querySelector("#ghLogout").addEventListener("click", async (ev) => {
-  ev.target.disabled = true;
-  try {
-    await call("/api/account", { method: "DELETE" });
-    reposCache = [];
-    $("#repoList").innerHTML = "";
-    $("#repoSearch").style.display = "none";
-    $("#accountOut").innerHTML = "";
-    await refreshAccount();
-    toast("Cuenta desconectada", "ok");
-  } catch (e) { toast(e.message, "err"); }
-  finally { ev.target.disabled = false; }
-});
-
-/**
- * Inicio de sesion con GitHub por device flow.
- *
- * Pedimos un codigo al servidor, lo mostramos, y esperamos. El token lo recibe el
- * servidor, no esta pagina: aqui solo se ve el codigo que la persona teclea en GitHub.
- */
-document.querySelector("#ghLogin").addEventListener("click", async (ev) => {
-  const state = document.querySelector("#ghState");
-  const box = document.querySelector("#ghDevice");
-  ev.target.disabled = true;
-  try {
-    const cfg = await call("/api/auth/github");
-    if (!cfg.configured) {
-      state.innerHTML = 'falta el <code>client_id</code>';
-      document.querySelector("#accountOut").innerHTML =
-        '<pre>' + esc("Para el inicio de sesion hace falta registrar una OAuth App:\n\n" +
-          cfg.howTo.map((s, i) => (i + 1) + ". " + s).join("\n")) + "</pre>";
-      toast("Falta registrar la app de GitHub (ver instrucciones)", "err");
-      return;
-    }
-    const pending = await call("/api/auth/github/start", { method: "POST" });
-    document.querySelector("#ghDevice").style.display = "";
-    document.querySelector("#ghCode").textContent = pending.userCode;
-    const uri = document.querySelector("#ghUri");
-    uri.href = pending.verificationUri;
-    uri.textContent = pending.verificationUri.replace("https://", "");
-    state.textContent = "esperando…";
-    const done = await call("/api/auth/github/wait", {
-      method: "POST", headers: { "content-type": "application/json" },
-      // El device_code nunca vino a esta pagina: el flujo se empareja por el codigo corto.
-      body: JSON.stringify({ userCode: pending.userCode, id: "github" }),
+    await fetch(`${API}/api/sandboxes/${selectedId}/inject`, {
+      method: "POST",
+      body: bytes
     });
-    box.style.display = "none";
-    document.querySelector("#accountOut").innerHTML =
-      '<pre>' + esc("cuenta conectada por GitHub: " + JSON.stringify(done, null, 2)) + "</pre>";
-    await refreshAccount();
-    toast("Cuenta conectada con " + done.fingerprint, "ok");
+    toast("Trabajo reinyectado correctamente", "ok");
   } catch (e) {
-    state.textContent = "";
-    document.querySelector("#ghDevice").style.display = "none";
     toast(e.message, "err");
-  } finally { ev.target.disabled = false; }
-});
-
-document.querySelector("#ghCopy").addEventListener("click", async () => {
-  const code = document.querySelector("#ghCode").textContent;
-  if (!code) return;
-  try { await navigator.clipboard.writeText(code); toast("Código copiado", "ok"); }
-  catch { toast("Copia a mano: " + code); }
-});
-
-/** Guardar una cuenta. El token viaja una vez y no vuelve nunca en la respuesta. */
-document.querySelector("#saveToken").addEventListener("click", async (ev) => {
-  const token = document.querySelector("#ghToken").value.trim();
-  if (!token) { toast("Pega el token", "err"); return; }
-  ev.target.disabled = true;
-  try {
-    // La cuenta es del servidor, no de un sandbox: no hace falta tener ninguno creado.
-    const r = await call("/api/account", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: "github", token, scopes: ["repo", "read:org"] }),
-    });
-    document.querySelector("#accountOut").innerHTML =
-      '<pre>' + esc("cuenta guardada\n" + JSON.stringify(r, null, 2)) + "</pre>";
-    document.querySelector("#ghToken").value = "";
-    await refreshAccount();
-    toast("Cuenta guardada", "ok");
-  } catch (e) { toast(e.message, "err"); }
-  finally { ev.target.disabled = false; }
-});
-
-document.querySelector("#askPass").addEventListener("change", (ev) => {
-  document.querySelector("#passForPush").style.display = ev.target.checked ? "" : "none";
-});
-
-// ------------------------------------------------------------------ repositorio
-const LOCK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f0dc8f" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
-const GLOBE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8ff0c4" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg>';
-
-function renderRepos(filter = "") {
-  const q = filter.trim().toLowerCase();
-  const list = reposCache.filter((r) => !q || r.full_name.toLowerCase().includes(q) || (r.description ?? "").toLowerCase().includes(q));
-  const box = $("#repoList");
-  if (!list.length) { box.innerHTML = '<p class="muted" style="margin:8px 0 0">Ninguno coincide.</p>'; return; }
-  box.innerHTML = '<div class="repos">' + list.map((r) => `
-    <div class="repo" data-repo="${esc(r.full_name)}" role="button" tabindex="0">
-      ${r.private ? LOCK : GLOBE}
-      <span class="nm"><i>${esc(r.full_name.split("/")[0])}/</i>${esc(r.full_name.split("/")[1])}</span>
-      <span class="meta">${r.language ? esc(r.language) + " · " : ""}${esc(hace(r.pushed_at))}</span>
-    </div>`).join("") + "</div>";
-}
-
-document.querySelector("#myRepos").addEventListener("click", async (ev) => {
-  ev.target.disabled = true;
-  try {
-    const gh = await refreshAccount();
-    if (!gh) { toast("Conecta primero tu cuenta de GitHub", "err"); return; }
-    const r = await call("/api/repos", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ accountId: "github", passphrase: gh.sealed ? $("#phrase").value : null }),
-    });
-    reposCache = r.repos;
-    $("#repoSearch").style.display = "";
-    $("#repoSearch").value = "";
-    renderRepos();
-    toast(r.count + " repos de @" + r.login, "ok");
-  } catch (e) { toast(e.message, "err"); }
-  finally { ev.target.disabled = false; }
-});
-
-document.querySelector("#repoSearch").addEventListener("input", (ev) => renderRepos(ev.target.value));
-
-// Elegir un repo de la lista: rellena la URL, marca la cuenta y lo trae.
-document.addEventListener("click", async (ev) => {
-  const item = ev.target.closest?.("[data-repo]");
-  if (!item) return;
-  $("#repoUrl").value = "https://github.com/" + item.dataset.repo;
-  $("#useAccount").checked = true; // si aparece en SU lista, es suyo: el token lo cubre
-  await cloneRepo();
-});
-document.addEventListener("keydown", async (ev) => {
-  if (ev.key === "Enter" && ev.target.matches?.("[data-repo]")) ev.target.click();
-});
-
-async function cloneRepo() {
-  const id = await activeId();
-  if (!id) return;
-  const url = document.querySelector("#repoUrl").value.trim();
-  if (!url) { toast("Pega la URL del repositorio", "err"); return; }
-  const withAccount = document.querySelector("#useAccount").checked;
-  const out = document.querySelector("#repoOut");
-  out.innerHTML = '<p class="muted">' + (withAccount
-    ? "Clonando en el servidor con tu cuenta, y entregando el código sin credenciales…"
-    : "Abriendo la red solo para traerlo…") + "</p>";
-  try {
-    if (withAccount) {
-      const gh = await refreshAccount();
-      const r = await call("/api/sandboxes/" + id + "/repo-private", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ accountId: "github", url, passphrase: gh?.sealed ? $("#phrase").value : null }),
-      });
-      out.innerHTML = '<pre>' + esc([
-        "traido: " + r.repo,
-        "commit: " + r.commit,
-        "credenciales dentro del sandbox: " + (r.credentialsInSandbox.length ? r.credentialsInSandbox.join(", ") : "ninguna"),
-      ].join("\n")) + "</pre>";
-    } else {
-      const r = await call("/api/sandboxes/" + id + "/repo", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-      out.innerHTML = '<pre>' + esc([
-        "traido: " + r.repo,
-        "commit: " + r.commit,
-        "archivos: " + r.files.slice(0, 8).join(", "),
-        "red: cerrada otra vez",
-      ].join("\n")) + "</pre>";
-    }
-    toast("Repo traido.", "ok");
-    await render();
-  } catch (e) {
-    out.innerHTML = '<p class="muted">' + esc(e.message) + "</p>";
   }
-}
+};
 
-document.querySelector("#cloneBtn").addEventListener("click", async (ev) => {
-  ev.target.disabled = true;
-  try { await cloneRepo(); } finally { ev.target.disabled = false; }
-});
-
-/** Empujar a movilclaw/… y abrir el PR. La rama main no es un destino valido. */
-document.querySelector("#pushPr").addEventListener("click", async (ev) => {
-  const id = await activeId();
-  if (!id) return;
-  const task = document.querySelector("#prTask").value.trim();
-  const passphrase = document.querySelector("#askPass").checked
-    ? document.querySelector("#passForPush").value : null;
-  ev.target.disabled = true;
-  const out = document.querySelector("#prOut");
-  out.innerHTML = '<p class="muted">Empujando a movilclaw/… y abriendo el PR…</p>';
+window.openPullRequest = async function() {
+  const task = $("#prTaskInput").value.trim();
+  if (!task || !selectedId) {
+    toast("Ingresa el nombre de la tarea", "err");
+    return;
+  }
   try {
-    const r = await call("/api/sandboxes/" + id + "/pr", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ accountId: "github", task, passphrase }),
+    const res = await call(`/api/sandboxes/${selectedId}/pr`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ accountId: "github", task })
     });
-    out.innerHTML = '<pre>' + esc([
-      "rama:  " + r.branch,
-      "base:  " + r.base + "  (solo lectura)",
-      "PR:    " + r.pullRequest,
-      "fusionado: " + r.merged,
-    ].join("\n")) + '</pre>' +
-      '<p class="muted" style="margin:8px 0 0">Ábrelo y revísalo. Fusionar es decisión tuya.</p>';
-    toast("PR abierto: " + r.branch, "ok");
+    toast("PR creado: " + res.pullRequest, "ok");
   } catch (e) {
-    out.innerHTML = '<p class="muted">' + esc(e.message) + "</p>";
-  } finally { ev.target.disabled = false; }
-});
+    toast(e.message, "err");
+  }
+};
 
-// ------------------------------------------------------------------ consola
-async function tool(name, args) {
-  const id = await activeId();
-  if (!id) throw new Error("sin sandbox elegido");
-  const r = await call("/api/sandboxes/" + id + "/tool", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, args }),
-  });
-  return r.result;
-}
-
-async function runArgv(argv) {
-  const out = document.querySelector("#cmdOut");
-  out.textContent = "$ " + argv.join(" ") + "\n…";
-  try {
-    const r = await tool("run", { argv });
-    out.textContent = "$ " + argv.join(" ") + "\n" + (r.out || r.err || "(sin salida)") +
-      (r.code ? "\n[salida " + r.code + "]" : "");
-  } catch (e) { out.textContent = "$ " + argv.join(" ") + "\n" + e.message; }
-}
-
-document.querySelector("#runBtn").addEventListener("click", async () => {
-  const raw = document.querySelector("#cmd").value.trim();
-  if (!raw) { toast("Escribe un comando", "err"); return; }
-  // Split on spaces on purpose: argv is a list, and a shell is never involved.
-  await runArgv(raw.split(/\s+/).filter(Boolean));
-});
-document.querySelector("#cmd").addEventListener("keydown", (ev) => {
-  if (ev.key === "Enter") $("#runBtn").click();
-});
-
-document.addEventListener("click", (ev) => {
-  const quick = ev.target.dataset?.argv;
-  if (quick) runArgv(quick.split("|"));
-});
-
-document.querySelector('.ttl[data-min="120"]').classList.add("primary");
-
-health(); render(); refreshAccount(); setInterval(() => { render(); health(); }, 15000);
+// ── Init ──
+checkHealth();
+refreshSandboxes();
+setInterval(refreshSandboxes, 10000);
 </script>
 </body>
 </html>

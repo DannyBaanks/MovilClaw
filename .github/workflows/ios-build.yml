@@ -1,0 +1,94 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag para release opcional (ej: v1.0.0)"
+        required: false
+        default: ""
+  push:
+    branches:
+      - main
+    paths:
+      - "ios/**"
+      - "web/**"
+      - ".github/workflows/ios-build.yml"
+
+jobs:
+  build-ipa:
+    name: Compilar IPA (iOS)
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar herramientas de compilación
+        run: |
+          brew install xcodegen
+
+      - name: Generar proyecto Xcode desde project.yml
+        run: |
+          cd ios
+          xcodegen generate
+          ls -la MovilClaw.xcodeproj
+
+      - name: Compilar App para iPhoneOS (Sin Firma)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/MovilClaw.xcodeproj \
+            -scheme MovilClaw \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath /tmp/movilclaw_dd \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            build | xcbeautify || true
+          
+          # Si xcbeautify no está instalado, xcodebuild ya completó
+
+      - name: Empaquetar IPA instalable
+        run: |
+          APP_PATH=$(find /tmp/movilclaw_dd -name "MovilClaw.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: MovilClaw.app no encontrado en /tmp/movilclaw_dd"
+            exit 1
+          fi
+          echo "App encontrada en: $APP_PATH"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qr MovilClaw.ipa Payload
+          ls -lh MovilClaw.ipa
+
+      - name: Subir artefacto .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: MovilClaw-iOS-IPA
+          path: MovilClaw.ipa
+          retention-days: 30
+
+      - name: Publicar Release (si se especificó tag)
+        if: github.event.inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag }}
+          files: MovilClaw.ipa
+          draft: false
+          prerelease: false
+          body: |
+            ## MovilClaw para iOS
+            
+            Cliente nativo de MovilClaw / ISyCode IDE compilado automáticamente por GitHub Actions.
+            
+            ### Cómo instalar en tu iPhone:
+            1. Descarga `MovilClaw.ipa`.
+            2. Instálalo con **AltStore**, **SideStore**, **Sideloadly**, **TrollStore** o **Scarlet**.
+            3. En tu PC arranca MovilClaw con:
+               ```bash
+               HOST=0.0.0.0 npm start
+               ```
+            4. Abre la app en tu iPhone y conecta con la IP local de tu PC (ej: `http://192.168.1.50:8788`).
