@@ -84,12 +84,12 @@ struct WebViewContainer: UIViewRepresentable {
                         response["pong"] = true
                     case "readFile":
                         let path = body["path"] as? String ?? ""
-                        let content = try sandbox.readFile(path: path)
+                        let content = try await sandbox.readFile(path: path)
                         response["content"] = content
                     case "writeFile":
                         let path = body["path"] as? String ?? ""
                         let content = body["content"] as? String ?? ""
-                        try sandbox.writeFile(path: path, content: content)
+                        _ = try await sandbox.writeFile(path: path, content: content)
                     case "runPython":
                         let code = body["code"] as? String ?? ""
                         let result = await PythonRunner.shared.run(code: code)
