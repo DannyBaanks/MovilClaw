@@ -21,9 +21,8 @@ targets:
     platform: iOS
     sources:
       - path: App
-        type: group
       - path: Assets.xcassets
-        type: group
+        type: file
       - path: ../web
         type: folder
         buildPhase: resources
