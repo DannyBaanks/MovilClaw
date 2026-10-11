@@ -1,7 +1,27 @@
 # MovilClaw
 
+[![Build iOS IPA](https://github.com/DannyBaanks/MovilClaw/actions/workflows/ios-build.yml/badge.svg)](https://github.com/DannyBaanks/MovilClaw/actions/workflows/ios-build.yml)
+![tests](https://img.shields.io/badge/tests-58%2F58%20pasando-brightgreen)
+![node](https://img.shields.io/badge/node-%E2%89%A520-informational)
+![deps](https://img.shields.io/badge/dependencias%20npm-0-blue)
+![licencia](https://img.shields.io/badge/licencia-MIT-lightgrey)
+
 Cliente de bolsillo y orquestador de **sandboxes kamikaze** para AutoClaw. Proyecto nuevo,
 hecho con AutoClaw y pensado para que otra gente use AutoClaw sin montar nada en su máquina.
+
+## Capturas de Pantalla
+
+Capturas reales tomadas directamente de la aplicación en ejecución (`npm start`):
+
+| Vista Escritorio / IDE Completo (1440×900) |
+| :---: |
+| ![MovilClaw en Escritorio](docs/img/escritorio.png) |
+
+| Vista Móvil / Chat & Coder (390×844) | Panel de Control & Sandboxes (Móvil) |
+| :---: | :---: |
+| ![MovilClaw Móvil](docs/img/movil.png) | ![Panel de Control Móvil](docs/img/movil-panel.png) |
+
+> **Nota de transparencia:** El panel de control (creación de sandboxes, caducidad, integración con GitHub, sellado y reinyección) interactúa con la API y Docker en vivo (verificable con el ID `mc-...`). El árbol de archivos y el diff en el editor corresponden a la vista de demostración de la interfaz.
 
 ## Qué hace hoy (probado, no prometido)
 
@@ -49,6 +69,19 @@ se puede abrir desde el móvil apuntando al servidor, sin CORS y sin adivinar ru
 > roto. El diseño era malo, no el usuario.
 
 ## Lo que se comprobó de verdad
+
+El proyecto cuenta con **58 pruebas automatizadas** en 8 suites ejecutadas contra Docker real (`npm test`), con **100% de éxito**. La evidencia completa está registrada en [docs/pruebas-salida.txt](docs/pruebas-salida.txt) (SHA-256: `048328a71e4d170c2849f377141745bb57373ff79fb1170f895f42bd1f7c1a11`):
+
+| Suite de Pruebas | Archivo | Pruebas | Qué verifica |
+| --- | --- | :---: | --- |
+| **Aislamiento Docker** | `tests/isolation.test.mjs` | 5 | Red bloqueada, sin acceso al disco del host, sin root, tope de RAM y borrado irreversible |
+| **Flujo de Repositorios** | `tests/repo.test.mjs` | 7 | Validación de URLs, escape de rutas, clonado público con cierre de red, herramientas del agente |
+| **Inyección de Trabajo** | `tests/inject.test.mjs` | 7 | Envío de código vía stdin, límites de tamaño, rechazo en contenedores destruidos y round-trip |
+| **Cifrado y Sellado** | `tests/seal.test.mjs` | 13 | PBKDF2 + AES-GCM, derivación de claves, envelope tamper-evident, permisos firmados (grants) |
+| **Ciclo de Vida** | `tests/lifecycle.test.mjs` | 9 | Máquina de estados: activo → suspendido → destruido, temporizadores y custodia de snapshot |
+| **Autenticación OAuth** | `tests/oauth.test.mjs` | 7 | GitHub Device Flow, código corto, sondeo con backoff y manejo de tokens expirados |
+| **Políticas de Seguridad** | `tests/policy.test.mjs` | 7 | Inmutabilidad de `main`, ramas `movilclaw/*`, rechazo de operaciones destructivas |
+| **Empaquetado de Espacio**| `tests/workspace.test.mjs` | 3 | Detección y exclusión de `.env`/claves privadas, empaquetado seguro y cloneWithToken |
 
 Pruebas de aislamiento **con Docker real**, no simuladas (`npm run test:isolation`):
 
@@ -123,6 +156,9 @@ La regla que manda: **nunca se destruye trabajo que no se haya entregado antes.*
 | `server/grant.mjs` | El permiso firmado con vencimiento (HMAC + caducidad) |
 | `server/sealed.mjs` | Guarda ciphertext. No tiene, a propósito, ninguna función para descifrarlo |
 | `tests/` | Ciclo de vida, cifrado y aislamiento con Docker real |
+| `ios/` | Cliente nativo iOS (SwiftUI + Pyodide WASM local + empaquetado XcodeGen) |
+| `.github/workflows/ios-build.yml` | Integración continua: compila el paquete `MovilClaw.ipa` en macOS-15 |
+| `docs/` | Guías de aislamiento, inicio de sesión, entorno, pruebas y manual E2E iOS |
 
 Sin dependencias de npm: solo Node 20+ y Docker.
 

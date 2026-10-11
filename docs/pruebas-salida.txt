@@ -1,0 +1,72 @@
+# npm test  — 2026-10-11T12:58:04-06:00
+# node v24.21.0 · docker Docker version 29.8.2 · commit 67001ae
+
+> movilclaw@0.1.0 test
+> node --test --test-concurrency=1 tests/*.test.mjs
+
+✔ an empty archive is refused before anything touches the container (1.804887ms)
+✔ an archive over the size ceiling is refused (0.417903ms)
+✔ a destroyed sandbox cannot receive work (0.377735ms)
+✔ the archive travels in through stdin, never as a mount nor on the command line (0.521016ms)
+✔ dockerSpawn writes input to the child's stdin, never into argv (11.049544ms)
+✔ round trip: work collected from one sandbox reads back in another (927.351442ms)
+✔ a sealed archive opens in the browser code and injects the same bytes (938.684928ms)
+✔ no network: a socket cannot leave the sandbox (307.734464ms)
+✔ no host filesystem: the sandbox only sees its own volume (409.672042ms)
+✔ it does not run as root, and cannot gain privileges (243.588075ms)
+✔ memory is capped: asking for far more than the limit fails (789.308402ms)
+✔ destroying removes the container AND the named volume with its data (303.048463ms)
+✔ a new sandbox is active with the countdown running (0.624077ms)
+✔ refuses a ttl outside the closed list (0.25954ms)
+✔ going idle suspends the compute; it does not destroy the data (0.13709ms)
+✔ a suspended sandbox with no snapshot delivered is never destroyed (0.12195ms)
+✔ only after the snapshot is delivered does it get destroyed (0.099545ms)
+✔ real use resets the countdown, so working never loses the sandbox (0.100848ms)
+✔ destroyed is final: nothing revives it (0.091439ms)
+✔ advance does not mutate the state it is given (0.089686ms)
+✔ every phase explains itself in words (0.251815ms)
+✔ without a client_id it refuses, and says how to register one (0.796144ms)
+✔ no client_id is hardcoded anywhere in the source (5.507895ms)
+✔ with a client_id it reads it as configured (0.659807ms)
+✔ the instructions tell a person what to do, in order (0.181757ms)
+✔ what the person sees names the code and the site (0.114575ms)
+✔ waiting backs off when GitHub says slow_down, and stops at the deadline (555.633767ms)
+✔ expired_token and access_denied are reported as themselves (0.280792ms)
+✔ main is never a push target, in any of its names (0.710667ms)
+✔ work goes to movilclaw/<task>, and the prefix is required (0.159564ms)
+✔ a branch name cannot smuggle git syntax (0.156788ms)
+✔ the generated branch says what it is and when it happened (0.41747ms)
+✔ every destructive operation is refused with a reason (0.199723ms)
+✔ a repository URL cannot point at a private address (0.180826ms)
+✔ a repo path cannot escape the working directory (0.204802ms)
+✔ a repository URL is validated before anything runs (0.909957ms)
+✔ a repo path cannot climb out of the repository (31778.516612ms)
+✔ clones a real public repository, then closes the network (49343.510046ms)
+✔ a failed clone still closes the network (34638.01702ms)
+✔ the tools let an agent read, edit, search, commit and run tests (23083.06879ms)
+✔ edit refuses an ambiguous replacement instead of guessing (1444.939166ms)
+✔ write and read agree, and a git operation outside the list is refused (2154.588598ms)
+✔ sealing hides the content: the plaintext is not in the blob (77.089452ms)
+✔ the right passphrase opens it (124.76646ms)
+✔ a wrong passphrase fails, and says nothing useful (138.207912ms)
+✔ a tampered blob fails: AES-GCM authenticates it (123.222106ms)
+✔ the salt and IV are different every time, so two seals are not comparable (137.052272ms)
+✔ a very short passphrase is refused instead of silently weak (0.298303ms)
+✔ the host stores ciphertext only: it cannot read what it keeps (63.48962ms)
+✔ the store refuses anything that is not a sealed envelope (0.57707ms)
+✔ destroying the seal removes the data irreversibly (64.388106ms)
+✔ the grant is valid until its moment, and dead after (1.62361ms)
+✔ a grant cannot be moved to another sandbox or forged (0.657098ms)
+✔ a grant cannot be asked to last forever (0.262176ms)
+✔ a grant says who may unseal, never the passphrase itself (0.662929ms)
+✔ planTransfer detects secret-looking files and skips node_modules (54.735402ms)
+✔ packWorkspace and unpackInto round-trip successfully (12.975112ms)
+✔ cloneWithToken uses HTTP Basic auth with x-access-token (0.330954ms)
+ℹ tests 58
+ℹ suites 0
+ℹ pass 58
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 148772.304121
