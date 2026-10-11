@@ -1,6 +1,7 @@
 name: MovilClaw
 options:
   bundleIdPrefix: dev.movilclaw
+  xcodeVersion: "15.4"
   deploymentTarget:
     iOS: "16.4"
   createIntermediateGroups: true

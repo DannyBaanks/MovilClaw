@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server/api.mjs",
     "server": "node server/api.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "test:isolation": "node --test tests/isolation.test.mjs",
     "sandbox:build": "docker build -t movilclaw/sandbox:latest server/",
     "probar": "bash scripts/probar.sh"

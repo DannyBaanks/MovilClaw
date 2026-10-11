@@ -138,7 +138,7 @@ test("the tools let an agent read, edit, search, commit and run tests", { skip }
 
 test("edit refuses an ambiguous replacement instead of guessing", { skip }, async () => {
   await withSandbox(async (orch, id) => {
-    await orch.cloneRepo(id, "https://github.com/octocat/Hello-World");
+    await orch.tool(id, "run", { argv: ["git", "init", "-b", "main"] });
     await orch.tool(id, "write", { path: "notas.txt", content: "hola hola hola" });
     await assert.rejects(
       () => orch.tool(id, "edit", { path: "notas.txt", from: "hola", to: "adios" }),
@@ -153,7 +153,7 @@ test("edit refuses an ambiguous replacement instead of guessing", { skip }, asyn
 
 test("write and read agree, and a git operation outside the list is refused", { skip }, async () => {
   await withSandbox(async (orch, id) => {
-    await orch.cloneRepo(id, "https://github.com/octocat/Hello-World");
+    await orch.tool(id, "run", { argv: ["git", "init", "-b", "main"] });
     await orch.tool(id, "write", { path: "src/nota.md", content: "# Nota\n\ncreado por el agente\n" });
     const read = await orch.tool(id, "read", { path: "src/nota.md" });
     assert.match(read.content, /creado por el agente/);

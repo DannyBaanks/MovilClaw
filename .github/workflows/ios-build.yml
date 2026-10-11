@@ -38,6 +38,7 @@ jobs:
       - name: Compilar App para iPhoneOS (Sin Firma)
         run: |
           set -o pipefail
+          xcodebuild -version
           xcodebuild \
             -project ios/MovilClaw.xcodeproj \
             -scheme MovilClaw \
@@ -47,9 +48,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            build | xcbeautify || true
-          
-          # Si xcbeautify no está instalado, xcodebuild ya completó
+            build
 
       - name: Empaquetar IPA instalable
         run: |

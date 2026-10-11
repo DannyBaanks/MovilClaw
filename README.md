@@ -174,10 +174,12 @@ sandbox no tiene ninguna, y las operaciones que **no existen** en el código.
   el `device_code` nunca sale del servidor. El token pegado sigue siendo la alternativa.
 - **UI del login de proveedor**: se apoya en el que tu app ya tiene (`models auth login`),
   pero elegirlo desde MovilClaw está por hacer.
-- **No hay app iOS.** El cliente es web. Ver [docs/ENTORNO.md](docs/ENTORNO.md): el runner
-  de macOS puede compilar Swift, y `ISyCodeMovil` es la plantilla, pero eso es otra entrega.
-- **Sin TLS ni autenticación en la API.** Escucha en loopback; exponerlo a una red es una
-  decisión del operador, y debe ir detrás de TLS.
+- **Cliente iOS y Dual-Engine (`[CURRENT]`):** Disponible en `ios/` con empaquetado `.ipa`
+  vía GitHub Actions (`.github/workflows/ios-build.yml`), soporte para ejecución en dispositivo
+  (Sandbox local en iPhone sin PC) y modo control remoto de Docker. Ver [docs/IOS-E2E-GUIA.md](docs/IOS-E2E-GUIA.md).
+- **Seguridad en red (HOST=0.0.0.0):** Escucha por defecto en loopback (127.0.0.1). Para conectar
+  el iPhone vía Wi-Fi se expone con `HOST=0.0.0.0 npm start`. En redes no confiables o públicas,
+  se debe utilizar un túnel seguro cifrado (Tailscale, WireGuard o SSH port forwarding con TLS).
 
 ## Licencia
 
