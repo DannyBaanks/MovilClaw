@@ -10,7 +10,8 @@
     "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "test:isolation": "node --test tests/isolation.test.mjs",
     "sandbox:build": "docker build -t movilclaw/sandbox:latest server/",
-    "probar": "bash scripts/probar.sh"
+    "probar": "bash scripts/probar.sh",
+    "ios:instalar": "bash scripts/instalar-ios.sh"
   },
   "engines": {
     "node": ">=20"

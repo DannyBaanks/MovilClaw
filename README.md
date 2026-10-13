@@ -1,7 +1,7 @@
 # MovilClaw
 
 [![Build iOS IPA](https://github.com/DannyBaanks/MovilClaw/actions/workflows/ios-build.yml/badge.svg)](https://github.com/DannyBaanks/MovilClaw/actions/workflows/ios-build.yml)
-![tests](https://img.shields.io/badge/tests-60%2F60%20pasando-brightgreen)
+![tests](https://img.shields.io/badge/tests-67%2F67%20pasando-brightgreen)
 ![node](https://img.shields.io/badge/node-%E2%89%A520-informational)
 ![deps](https://img.shields.io/badge/dependencias%20npm-0-blue)
 ![licencia](https://img.shields.io/badge/licencia-MIT-lightgrey)
@@ -202,6 +202,22 @@ no se fusiona: fusionar es tuyo.
 
 Ver [docs/CREDENCIALES.md](docs/CREDENCIALES.md): dónde vive cada credencial, por qué el
 sandbox no tiene ninguna, y las operaciones que **no existen** en el código.
+
+## Instalar la app en tu iPhone (sin Mac)
+
+Tu CI compila la IPA en su runner de macOS; **la instalación sí se puede hacer desde Linux**
+con [`xtool`](https://github.com/xtool-org/xtool):
+
+```bash
+npm run ios:instalar -- --comprobar   # qué falta, con el comando exacto
+npm run ios:instalar                  # baja la IPA del CI e instala
+```
+
+Comprueba la IPA **antes** de tocar el teléfono (un zip cualquiera se rechaza aquí, no en el
+iPhone con un error incomprensible). Ver [docs/INSTALAR-EN-IPHONE.md](docs/INSTALAR-EN-IPHONE.md).
+
+Lo que **no** se puede: compilar iOS en Linux. `xtool sdk install` no descarga el SDK de Apple,
+se lo tienes que dar. El CI sigue siendo quien compila.
 
 ## Qué NO hay todavía
 
