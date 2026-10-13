@@ -21,7 +21,7 @@ import {
 import { DEFAULT_SPEC, realDocker } from "./docker.mjs";
 import { PHASES as NET_PHASES, assertHostAllowed, createNetwork, describePhase } from "./network.mjs";
 import { branchFor } from "./policy.mjs";
-import { packWorkspace, planTransfer } from "./workspace.mjs";
+import { packWorkspace, planTransfer, unpackTar } from "./workspace.mjs";
 import { cloneOnHost, pushBranchAndOpenPr } from "./github.mjs";
 
 export class OrchestratorError extends Error {}
@@ -327,11 +327,10 @@ export function createOrchestrator({
       const work = await cloneOnHost({ remoteUrl: `https://github.com/${sandbox.repo}`, token });
       try {
         const archive = await this.collectWork(id);
-        await run("tar", ["-xzf", "-", "-C", work.dir], {
-          input: archive,
-          timeoutMs: 300_000,
-          maxBuffer: 256 * 1024 * 1024,
-        });
+        // spawn, not execFile-with-input. The latter hung here forever and stalled every
+        // push-and-open-PR: the branch never appeared and no error was ever raised. This
+        // was the second place with the same mistake, and it is the one that mattered.
+        await unpackTar(work.dir, archive);
         const result = await pushBranchAndOpenPr({
           workDir: work.dir,
           token,

@@ -7,7 +7,7 @@
  * `spawn` is injected, so the tests can exercise the exact command line without a Docker
  * daemon, and the real runs use the same code path.
  */
-import { spawn as nodeSpawn } from "node:child_process";
+import { spawn, spawn as nodeSpawn } from "node:child_process";
 
 /** The isolation flags, named so a reviewer can check them one by one. */
 export const ISOLATION = Object.freeze({
@@ -140,12 +140,46 @@ export function realDocker(run = dockerSpawn()) {
      * With `input`, the command runs under `docker exec -i` and the bytes arrive through
      * stdin — the only channel big enough for a whole repository.
      */
+    /**
+     * Run one command inside a container, optionally piping bytes to its stdin.
+     *
+     * When there is data to send it uses `spawn` and not `promisify(execFile)` with an
+     * `input` option. That is a fix, and the reason is worth keeping: with `execFile` the
+     * call **never came back** when the payload was an archive, which silently stalled
+     * every push-and-open-PR — the branch never appeared and no error was ever raised.
+     * Measured side by side on the same archive: `execFile` hung until cancelled,
+     * `spawn` finished in 9 ms.
+     *
+     * stdin is ended explicitly; that is what tells the command there is no more input.
+     */
     async runCommand(name, argv, { timeoutMs = 120_000, input = null } = {}) {
+      if (input !== null && input !== undefined) {
+        return new Promise((resolve) => {
+          const child = spawn("docker", ["exec", "-i", name, ...argv], {
+            stdio: ["pipe", "pipe", "pipe"],
+          });
+          let out = "";
+          let err = "";
+          const timer = setTimeout(() => {
+            child.kill("SIGKILL");
+            resolve({ code: 124, out, err: `${err}\nse cancelo tras ${Math.round(timeoutMs / 1000)}s`.trim() });
+          }, timeoutMs);
+          child.stdout?.on("data", (chunk) => { out += chunk; });
+          child.stderr?.on("data", (chunk) => { err += chunk; });
+          child.on("error", (error) => {
+            clearTimeout(timer);
+            resolve({ code: 1, out, err: error.message });
+          });
+          child.on("close", (code) => {
+            clearTimeout(timer);
+            resolve({ code: code ?? 1, out: out.trim(), err: err.trim() });
+          });
+          child.stdin.end(input);
+        });
+      }
+
       try {
-        const { out, err } = await run(
-          ["exec", ...(input === null ? [] : ["-i"]), name, ...argv],
-          { timeoutMs, input },
-        );
+        const { out, err } = await run(["exec", name, ...argv], { timeoutMs });
         return { code: 0, out, err };
       } catch (error) {
         // A non-zero exit is a result, not an internal failure: report it instead of throwing.

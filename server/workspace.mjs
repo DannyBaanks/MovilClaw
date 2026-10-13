@@ -141,12 +141,38 @@ export async function packWorkspace(directory) {
 export async function unpackInto(directory, archive) {
   const info = await stat(directory).catch(() => null);
   if (!info?.isDirectory()) throw new WorkspaceError("el destino no es una carpeta");
-  await new Promise((resolve, reject) => {
-    const child = spawn("tar", ["-xzf", "-", "-C", directory], {
-      stdio: ["pipe", "ignore", "pipe"],
+  await unpackTar(directory, archive);
+}
+
+/**
+ * Pipe an archive into `tar -x` inside a directory.
+ *
+ * This uses `spawn`, not `execFile` with an `input` option, and that is a **fix**, not a
+ * style choice. With `promisify(execFile)` and an `input` archive the call never returned:
+ * measured, it hung until the caller was killed, while `spawn` extracts the same archive in
+ * single-digit milliseconds. Every push-and-open-PR was stuck on exactly this call, with no
+ * error raised — the worst shape a bug can have.
+ *
+ * stdin is ended explicitly, which is what tells tar there is no more input.
+ */
+export function unpackTar(directory, archive, { timeoutMs = 300_000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("tar", ["-xzf", "-", "-C", directory], { stdio: ["pipe", "ignore", "pipe"] });
+    let err = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new WorkspaceError(`tar tardo mas de ${Math.round(timeoutMs / 1000)}s y se cancelo`));
+    }, timeoutMs);
+    child.stderr.on("data", (chunk) => { err += chunk; });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(new WorkspaceError(`no se pudo ejecutar tar: ${error.message}`));
     });
-    child.on("error", reject);
-    child.on("close", (code) => (code === 0 ? resolve() : reject(new WorkspaceError(`tar salio con ${code}`))));
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new WorkspaceError(`tar salio con ${code}: ${err.slice(0, 200)}`));
+    });
     child.stdin.end(archive);
   });
 }

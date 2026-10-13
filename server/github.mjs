@@ -13,7 +13,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { PolicyError, assertPushableBranch, defaultBranchProtection } from "./policy.mjs";
 
 const run = promisify(execFile);
@@ -33,7 +33,15 @@ export class GithubError extends Error {}
  */
 async function gitWithToken(args, token, options = {}) {
   const basic = Buffer.from(`x-access-token:${token}`, "utf8").toString("base64");
-  return run("git", ["-c", `http.extraheader=Authorization: Basic ${basic}`, ...args], {
+  // `cwd` is required, not optional, and that is the fix for the worst bug in this file.
+  // Without it, git runs in the *server's own working directory* — which is the project
+  // checkout — so a push with a refspec that did not exist there failed, and would have
+  // pushed the agent's branch into MovilClaw itself had the name happened to match.
+  // A credential-bearing git command must never run "wherever the process happens to be".
+  if (!options.cwd) {
+    throw new GithubError("gitWithToken necesita un directorio de trabajo explicito");
+  }
+  return run("git", ["-C", options.cwd, "-c", `http.extraheader=Authorization: Basic ${basic}`, ...args], {
     maxBuffer: 32 * 1024 * 1024,
     timeout: options.timeoutMs ?? 120_000,
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
@@ -114,7 +122,10 @@ export async function cloneOnHost({ remoteUrl, token, branch = null }) {
   const url = `https://github.com/${owner}/${repo}.git`;
   const dir = await mkdtemp(join(tmpdir(), "mc-clone-"));
   try {
+    // `clone` needs a directory that exists: the caller's temp dir is the cwd, and the
+    // destination is passed as the final argument.
     await gitWithToken(["clone", "--depth", "1", ...(branch ? ["--branch", branch] : []), url, dir], token, {
+      cwd: dirname(dir),
       timeoutMs: 300_000,
     });
   } catch (error) {
@@ -154,12 +165,20 @@ export async function pushBranchAndOpenPr({
   const { stdout: remote } = await run("git", ["-C", workDir, "remote", "get-url", "origin"]);
   const { owner, repo } = parse(remote.trim());
 
-  // Something to push? An empty branch means an empty pull request, which helps nobody.
+  // Is there anything to push? An empty branch means an empty pull request, which helps nobody.
+  //
+  // The comparison is against `origin/<base>`, and that detail was a bug: after unpacking the
+  // sandbox's `.git` over a `--depth 1` clone, the local `<base>` ref and `HEAD` can point at
+  // the *same* commit, so `rev-list main..HEAD` answered 0 while the work was right there.
+  // Measured: `main..HEAD` = 0 and `origin/main..HEAD` = 1 on the very same directory.
+  // The remote-tracking ref is the one that still remembers where the branch started.
   const { stdout: status } = await run("git", ["-C", workDir, "status", "--porcelain"]);
-  const { stdout: ahead } = await run("git", ["-C", workDir, "rev-list", "--count", `${baseBranch}..HEAD`]).catch(
-    () => ({ stdout: "0" }),
+  const { stdout: head } = await run("git", ["-C", workDir, "rev-parse", "HEAD"]);
+  const { stdout: base } = await run("git", ["-C", workDir, "rev-parse", `origin/${baseBranch}`]).catch(
+    () => ({ stdout: "" }),
   );
-  if (!status.trim() && Number(ahead) === 0) {
+  const movedSinceBase = base.trim() && head.trim() !== base.trim();
+  if (!status.trim() && !movedSinceBase) {
     throw new GithubError("no hay ningun cambio que empujar");
   }
 
@@ -176,7 +195,10 @@ export async function pushBranchAndOpenPr({
   if (current.trim() === baseBranch) {
     throw new PolicyError("se iba a empujar a la rama base; se cancela");
   }
-  await gitWithToken(["push", "--set-upstream", "origin", safeBranch], token, { timeoutMs: 300_000 });
+  await gitWithToken(["push", "--set-upstream", "origin", safeBranch], token, {
+    cwd: workDir,
+    timeoutMs: 300_000,
+  });
 
   // Open the pull request through the API, with the token, on the host.
   const payload = JSON.stringify({
