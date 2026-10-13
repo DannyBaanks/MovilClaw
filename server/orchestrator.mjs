@@ -418,6 +418,7 @@ export function createOrchestrator({
       switch (name) {
         case "read": {
           const path = safePath(args.path);
+          await resolveInsideRepo(docker, sandbox.name, repo, path);
           const result = await docker.runCommand(sandbox.name, ["cat", `${repo}/${path}`], { timeoutMs: 30_000 });
           if (result.code !== 0) throw new OrchestratorError(`no se puede leer ${path}`);
           // Bounded: a 200 MB file must not travel through the API.
@@ -425,6 +426,8 @@ export function createOrchestrator({
         }
         case "write": {
           const path = safePath(args.path);
+          // Checked before writing, not after: a link pointing outside must not be overwritten.
+          await resolveInsideRepo(docker, sandbox.name, repo, path);
           const content = typeof args.content === "string" ? args.content : "";
           if (content.length > 1_000_000) throw new OrchestratorError("el contenido supera 1 MB");
           // Written through a file, not a shell, so the content is never parsed as code.
@@ -442,6 +445,7 @@ export function createOrchestrator({
         }
         case "list": {
           const path = safePath(args.path ?? ".", true);
+          await resolveInsideRepo(docker, sandbox.name, repo, path);
           const result = await docker.runCommand(sandbox.name, ["ls", "-la", `${repo}/${path}`]);
           return { path, listing: result.out };
         }
@@ -457,6 +461,7 @@ export function createOrchestrator({
         case "edit": {
           // A precise replacement: find the old text, put the new one in its place.
           const path = safePath(args.path);
+          await resolveInsideRepo(docker, sandbox.name, repo, path);
           const from = typeof args.from === "string" ? args.from : "";
           const to = typeof args.to === "string" ? args.to : "";
           if (!from) throw new OrchestratorError("edit necesita el texto a reemplazar");
@@ -556,6 +561,17 @@ export function parseRepoUrl(input) {
 }
 
 /** A repository-relative path, with no way out of /work/app. */
+/**
+ * A repository-relative path, with no way out of `/work/app`.
+ *
+ * The textual checks below are necessary and **not sufficient**, which a test caught: a
+ * symbolic link *inside* the repository that points outside it keeps its textual path
+ * inside, so it passes every string check while the real file is somewhere else. Measured,
+ * not theorised: `ln -s /work/secreto.txt app/enlace.txt` was readable through the tools.
+ *
+ * So the caller must also resolve the path inside the sandbox, where the links actually
+ * are, with `resolveInsideRepo` below.
+ */
 function safePath(value, allowRoot = false) {
   const path = String(value ?? "").trim();
   if (!path || path === ".") {
@@ -566,6 +582,31 @@ function safePath(value, allowRoot = false) {
     throw new OrchestratorError("la ruta debe ser relativa y quedarse dentro del repositorio");
   }
   return path.replace(/^\.\//, "");
+}
+
+/**
+ * Ask the sandbox itself where a path really lands, and refuse anything that leaves the repo.
+ *
+ * `readlink -f` resolves every link in the path, so a symlink pointing outside shows up as
+ * an outside path. The comparison is done on the resolved form, which is the only form that
+ * describes the file that would actually be read or written.
+ */
+async function resolveInsideRepo(docker, container, repo, relative) {
+  const probe = await docker.runCommand(container, [
+    "sh", "-c",
+    // -m so a not-yet-existing file is still resolved as far as it can be (the write case).
+    `readlink -m -- ${JSON.stringify(`${repo}/${relative}`)}`,
+  ]);
+  const resolved = probe.out.trim();
+  if (!resolved) {
+    throw new OrchestratorError("no se pudo comprobar la ruta dentro del repositorio");
+  }
+  if (resolved !== repo && !resolved.startsWith(`${repo}/`)) {
+    throw new OrchestratorError(
+      "esa ruta apunta fuera del repositorio (un enlace), asi que no se toca",
+    );
+  }
+  return relative;
 }
 
 /** Exported for the policy tests: the path rule must be testable on its own. */

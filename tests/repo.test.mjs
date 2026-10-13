@@ -164,3 +164,47 @@ test("write and read agree, and a git operation outside the list is refused", { 
     await assert.rejects(() => orch.tool(id, "no-existe", {}), /tool desconocida/);
   });
 });
+
+test("a symbolic link cannot smuggle a file in from outside the repository", { skip }, async () => {
+  await withSandbox(async (orch, id) => {
+    await orch.cloneRepo(id, "https://github.com/octocat/Hello-World");
+
+    // Plant the trap: a secret outside /work/app, and a link to it inside.
+    // This is not hypothetical: it was found by auditing, and it used to work.
+    const planted = await orch.tool(id, "run", {
+      argv: ["sh", "-c",
+        "echo 'SECRETO FUERA DEL REPO' > /work/secreto.txt && " +
+        "ln -sf /work/secreto.txt /work/app/enlace.txt && " +
+        "ls -l /work/app/enlace.txt"],
+    });
+    assert.equal(planted.code, 0, "the trap must be planted for the test to mean anything");
+
+    // Reading through the link must be refused, not merely discouraged.
+    await assert.rejects(
+      () => orch.tool(id, "read", { path: "enlace.txt" }),
+      /fuera del repositorio|enlace/,
+      "leer por un enlace que sale del repo debe rechazarse",
+    );
+
+    // And nothing was written through it either.
+    const intact = await orch.tool(id, "run", { argv: ["sh", "-c", "cat /work/secreto.txt"] });
+    assert.match(intact.out, /SECRETO FUERA DEL REPO/, "el archivo de fuera no debe haber cambiado");
+
+    // A legitimate file in the repository still works: the check is not "refuse everything".
+    await orch.tool(id, "write", { path: "normal.txt", content: "esto si" });
+    const readBack = await orch.tool(id, "read", { path: "normal.txt" });
+    assert.match(readBack.content, /esto si/);
+  });
+});
+
+test("a link that points inside the repository is still allowed", { skip }, async () => {
+  await withSandbox(async (orch, id) => {
+    await orch.cloneRepo(id, "https://github.com/octocat/Hello-World");
+    // An internal link is harmless and must not be caught by the same rule.
+    await orch.tool(id, "run", {
+      argv: ["sh", "-c", "ln -sf /work/app/README /work/app/interno.txt"],
+    });
+    const read = await orch.tool(id, "read", { path: "interno.txt" });
+    assert.match(read.content, /Hello/i);
+  });
+});

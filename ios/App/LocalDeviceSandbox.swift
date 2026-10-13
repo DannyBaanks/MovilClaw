@@ -43,6 +43,13 @@ public actor LocalDeviceSandbox {
     }
 
     /// Valida que la ruta sea relativa y no intente escapar con '..' o prefijos absolutos.
+    ///
+    /// Ojo con lo que **no** basta, porque a este paso se le escapaba un caso:
+    /// `standardizedFileURL` normaliza el texto (quita `..`) pero **no resuelve enlaces
+    /// simbólicos**. Un enlace *dentro* del workspace apuntando fuera conserva su ruta
+    /// textual dentro, así que pasaba la comprobación de prefijo mientras el archivo real
+    /// vivía en otro sitio. Lo encontró una auditoría, y por eso ahora se resuelven los
+    /// enlaces con `resolvingSymlinksInPath` y se compara la ruta **resuelta**.
     public func resolveSafePath(_ relativePath: String) throws -> URL {
         let clean = relativePath.trimmingCharacters(in: .whitespacesAndNewlines)
         if clean.isEmpty || clean == "." {
@@ -53,13 +60,50 @@ public actor LocalDeviceSandbox {
                 NSLocalizedDescriptionKey: "DENY: La ruta debe ser relativa y mantenerse estrictamente dentro del workspace."
             ])
         }
-        let target = workspaceURL.appendingPathComponent(clean).standardizedFileURL
-        guard target.path.hasPrefix(workspaceURL.path) else {
+
+        let candidate = workspaceURL.appendingPathComponent(clean).standardizedFileURL
+
+        // La ruta resuelta es la unica que describe el archivo que se va a tocar de verdad.
+        // Para una ruta que todavia no existe (caso de escritura), se resuelve el directorio
+        // padre, que es lo que sí existe y donde pueden estar los enlaces.
+        let resolvedTarget = candidate.resolvingSymlinksInPath()
+        let resolvedRoot = workspaceURL.resolvingSymlinksInPath()
+
+        guard Self.isInside(resolvedTarget, root: resolvedRoot) else {
             throw NSError(domain: "MovilClawSandbox", code: 403, userInfo: [
-                NSLocalizedDescriptionKey: "DENY: Intento de escape de directorio detectado."
+                NSLocalizedDescriptionKey: "DENY: La ruta apunta fuera del workspace (enlace simbolico)."
             ])
         }
-        return target
+
+        // Y ademas, ningun tramo del camino puede ser un enlace que salga del workspace.
+        if let escaped = Self.firstEscapingLink(candidate, root: workspaceURL) {
+            throw NSError(domain: "MovilClawSandbox", code: 403, userInfo: [
+                NSLocalizedDescriptionKey: "DENY: El tramo '\(escaped)' es un enlace que sale del workspace."
+            ])
+        }
+        return candidate
+    }
+
+    /// Comprueba que una ruta resuelta cae dentro de la raiz resuelta, sin confundir
+    /// `/work/app-otro` con `/work/app` (el prefijo de texto solo no distingue esos dos).
+    private static func isInside(_ path: URL, root: URL) -> Bool {
+        let p = path.pathComponents
+        let r = root.pathComponents
+        return p.count >= r.count && Array(p.prefix(r.count)) == r
+    }
+
+    /// Devuelve el primer tramo relativo que resuelve fuera del workspace, o nil si todo esta dentro.
+    private static func firstEscapingLink(_ target: URL, root: URL) -> String? {
+        var current = root
+        let relative = Array(target.pathComponents.dropFirst(root.pathComponents.count))
+        for component in relative {
+            current.appendPathComponent(component)
+            let resolved = current.resolvingSymlinksInPath()
+            if !isInside(resolved, root: root.resolvingSymlinksInPath()) {
+                return component
+            }
+        }
+        return nil
     }
 
     /// Lee el contenido de un archivo dentro del workspace.

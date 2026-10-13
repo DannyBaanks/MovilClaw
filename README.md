@@ -1,7 +1,7 @@
 # MovilClaw
 
 [![Build iOS IPA](https://github.com/DannyBaanks/MovilClaw/actions/workflows/ios-build.yml/badge.svg)](https://github.com/DannyBaanks/MovilClaw/actions/workflows/ios-build.yml)
-![tests](https://img.shields.io/badge/tests-58%2F58%20pasando-brightgreen)
+![tests](https://img.shields.io/badge/tests-60%2F60%20pasando-brightgreen)
 ![node](https://img.shields.io/badge/node-%E2%89%A520-informational)
 ![deps](https://img.shields.io/badge/dependencias%20npm-0-blue)
 ![licencia](https://img.shields.io/badge/licencia-MIT-lightgrey)
