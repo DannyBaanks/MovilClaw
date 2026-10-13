@@ -84,7 +84,16 @@ function postForm(url, params) {
       },
     );
     req.on("timeout", () => { req.destroy(); reject(new OAuthError("github no respondio a tiempo")); });
-    req.on("error", (error) => reject(new OAuthError(`no se pudo hablar con github: ${error.message}`)));
+    req.on("error", (error) => {
+      // A transient DNS or socket failure is not a verdict from GitHub: it is the network
+      // being unhelpful for a moment. Marked so the caller can retry instead of throwing
+      // away an authorization the person already granted.
+      const transient = ["EAI_AGAIN", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "EPIPE"]
+        .some((code) => String(error.code ?? "").includes(code) || String(error.message).includes(code));
+      const wrapped = new OAuthError(`no se pudo hablar con github: ${error.message}`);
+      wrapped.transient = transient;
+      reject(wrapped);
+    });
     req.end(body);
   });
 }
@@ -124,12 +133,33 @@ export async function waitForToken({
   const deadline = now() + Math.min(timeoutMs, CODE_TTL_MS);
   let wait = intervalMs;
 
+  /** Network hiccups tolerated in a row before giving up. GitHub already said yes. */
+  const MAX_TRANSIENT_FAILURES = 5;
+  let transientFailures = 0;
+
   while (now() < deadline) {
-    const reply = await postForm(TOKEN_URL, {
-      client_id: clientId,
-      device_code: deviceCode,
-      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-    });
+    let reply;
+    try {
+      reply = await postForm(TOKEN_URL, {
+        client_id: clientId,
+        device_code: deviceCode,
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      });
+    } catch (error) {
+      // Measured in practice: a momentary DNS failure (`EAI_AGAIN`) killed a login the
+      // person had already approved, forcing them to start over. That is not a real
+      // refusal from GitHub, so it is retried; a non-network error still stops here.
+      if (!error?.transient) throw error;
+      transientFailures += 1;
+      if (transientFailures > MAX_TRANSIENT_FAILURES) {
+        throw new OAuthError(
+          "no se pudo hablar con github tras varios intentos; revisa tu conexion y vuelve a empezar",
+        );
+      }
+      await sleep(wait);
+      continue;
+    }
+    transientFailures = 0;
 
     if (reply.access_token) {
       return { token: reply.access_token, scopes: String(reply.scope ?? "").split(",").map((s) => s.trim()).filter(Boolean) };

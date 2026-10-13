@@ -1303,6 +1303,9 @@
       <div id="ghDeviceBox" style="display:none;margin-top:10px;background:#060a12;padding:10px;border-radius:8px">
         <div style="font-size:12px;color:var(--ink-muted)">Abre <a id="ghDevUri" href="#" target="_blank" style="color:var(--cyan)">github.com/login/device</a> y escribe:</div>
         <b id="ghDevCode" style="font-size:18px;color:var(--cyan);letter-spacing:2px;display:block;margin:6px 0"></b>
+        <div style="font-size:12px;color:var(--ink-muted)">
+          <span id="ghDevCountdown"></span> · puedes dejarlo abierto y autorizar cuando quieras.
+        </div>
       </div>
     </div>
 
@@ -1763,6 +1766,25 @@ window.loginGitHub = async function() {
     $("#ghDevCode").textContent = res.userCode;
     $("#ghDevUri").href = res.verificationUri;
     toast("Código generado: autoriza en GitHub", "ok");
+
+    // El código de GitHub caduca, y sin verlo se pierde el tiempo autorizando uno vencido.
+    // Ya pasó dos veces: la cuenta atrás evita el tercero.
+    const expiresAt = Date.now() + (res.expiresInMs || 900000);
+    clearInterval(window.__ghTimer);
+    const tick = () => {
+      const left = Math.max(0, expiresAt - Date.now());
+      const m = Math.floor(left / 60000);
+      const sec = Math.floor((left % 60000) / 1000);
+      const box = document.querySelector("#ghDevCountdown");
+      if (box) {
+        box.textContent = left > 0
+          ? "el código caduca en " + m + ":" + String(sec).padStart(2, "0")
+          : "el código ha caducado; pulsa de nuevo para pedir otro";
+      }
+      if (left <= 0) clearInterval(window.__ghTimer);
+    };
+    tick();
+    window.__ghTimer = setInterval(tick, 1000);
     const wait = await call("/api/auth/github/wait", {
       method: "POST",
       headers: { "content-type": "application/json" },

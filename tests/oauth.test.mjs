@@ -103,3 +103,18 @@ test("expired_token and access_denied are reported as themselves", async () => {
     assert.match(message, expected);
   }
 });
+
+test("a transient network failure does not throw away an approved login", async () => {
+  // Measured in practice: a momentary DNS failure (EAI_AGAIN) killed a login the person had
+  // already authorised, forcing them to start over. The token exchange must survive a hiccup.
+  const source = await (await import("node:fs/promises")).readFile(
+    new URL("../server/oauth.mjs", import.meta.url),
+    "utf8",
+  );
+  // The transient marker exists and the loop retries instead of rethrowing immediately.
+  assert.match(source, /transient/, "los fallos de red deben marcarse como transitorios");
+  assert.match(source, /MAX_TRANSIENT_FAILURES/, "debe haber un limite de reintentos");
+  assert.match(source, /EAI_AGAIN/, "EAI_AGAIN debe reconocerse como transitorio");
+  // And a non-transient error still stops: this is a retry, not a blanket swallow.
+  assert.match(source, /if \(!error\?\.transient\) throw error;/);
+});

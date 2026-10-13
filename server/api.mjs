@@ -14,6 +14,7 @@ import { OrchestratorError, createOrchestrator } from "./orchestrator.mjs";
 import { createSealedStore } from "./sealed.mjs";
 import { createCredentialStore } from "./credentials.mjs";
 import { describeConfiguration, instructions, requestDeviceCode, waitForToken } from "./oauth.mjs";
+import { describeClientId, loadEnvFile } from "./env.mjs";
 import { listRepos, whoami } from "./github.mjs";
 import { open as openSealed, seal as sealBytes } from "../web/seal.mjs";
 import { issueGrant, verifyGrant } from "./grant.mjs";
@@ -456,6 +457,19 @@ const invokedDirectly =
 if (invokedDirectly) {
   const port = Number(process.env.PORT ?? 8788);
   const host = process.env.HOST ?? "127.0.0.1";
+  // A local .env is read first, so a client_id does not have to be retyped on every start
+  // (and does not end up in a shell history). The real environment always wins over it.
+  const envFile = loadEnvFile();
+  if (envFile.found && envFile.loaded.length) {
+    console.log(`Configuracion de ${envFile.path}: ${envFile.loaded.join(", ")}`);
+  }
+  const clientId = describeClientId(process.env.MOVILCLAW_GITHUB_CLIENT_ID);
+  if (clientId) {
+    console.log(`Inicio de sesion con GitHub: listo (client_id ${clientId.preview})`);
+  } else {
+    console.log("Inicio de sesion con GitHub: falta el client_id (la interfaz te dira como)");
+  }
+
   createApi().listen(port, host, () => {
     // One URL, and it is the app. The API is behind /api on the same origin.
     console.log(`MovilClaw listo: abre http://${host}:${port} en el navegador`);
