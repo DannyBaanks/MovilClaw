@@ -1,7 +1,7 @@
 # MovilClaw
 
 [![Build iOS IPA](https://github.com/DannyBaanks/MovilClaw/actions/workflows/ios-build.yml/badge.svg)](https://github.com/DannyBaanks/MovilClaw/actions/workflows/ios-build.yml)
-![tests](https://img.shields.io/badge/tests-67%2F67%20pasando-brightgreen)
+![tests](https://img.shields.io/badge/tests-76%2F76%20pasando-brightgreen)
 ![node](https://img.shields.io/badge/node-%E2%89%A520-informational)
 ![deps](https://img.shields.io/badge/dependencias%20npm-0-blue)
 ![licencia](https://img.shields.io/badge/licencia-MIT-lightgrey)
@@ -57,9 +57,36 @@ Teléfono / navegador  ──►  PWA  ──►  Orquestador  ──►  sandbo
 ## Arrancarlo
 
 ```bash
-npm run sandbox:build     # imagen del sandbox (una vez)
+git clone https://github.com/DannyBaanks/MovilClaw && cd MovilClaw
+npm run sandbox:build     # imagen del sandbox (una vez, necesita Docker)
 npm start                 # y abre http://127.0.0.1:8788
 ```
+
+Sin dependencias de npm: solo **Node 20+** y **Docker**.
+
+### Para repos privados y PRs: entra con GitHub
+
+Sin cuenta funciona con repos públicos. Con cuenta, también los privados, y puede abrir PRs.
+**No hay que pegar ningún token:**
+
+```bash
+cp .env.example .env      # y pon tu client_id
+npm start                 # y en la interfaz: Iniciar sesión con GitHub
+```
+
+Te da un código de 8 dígitos, lo escribes en `github.com/login/device`, autorizas, y listo. El
+token llega al servidor y **nunca entra al sandbox ni a tu navegador**.
+
+Antes, registra tu OAuth App una vez (gratis, 2 minutos, **a tu nombre**):
+[github.com/settings/applications/new](https://github.com/settings/applications/new) → nombre
+`MovilClaw`, Homepage `http://127.0.0.1:8788`, **marca «Enable Device Flow»**, y copia el
+Client ID al `.env`.
+
+> No usamos el `client_id` de otra app a propósito: GitHub mostraría **su** nombre en la
+> pantalla de permisos y estarías autorizando algo distinto de lo que crees. Hay una prueba
+> que falla si alguien pega uno prestado en el código.
+
+Detalle en [docs/INICIO-DE-SESION.md](docs/INICIO-DE-SESION.md).
 
 **Un proceso, un puerto, una URL.** `/` es la app y `/api/*` es la API, en el mismo origen:
 se puede abrir desde el móvil apuntando al servidor, sin CORS y sin adivinar rutas.
@@ -70,7 +97,7 @@ se puede abrir desde el móvil apuntando al servidor, sin CORS y sin adivinar ru
 
 ## Lo que se comprobó de verdad
 
-El proyecto cuenta con **58 pruebas automatizadas** en 8 suites ejecutadas contra Docker real (`npm test`), con **100% de éxito**. La evidencia completa está registrada en [docs/pruebas-salida.txt](docs/pruebas-salida.txt) (SHA-256: `048328a71e4d170c2849f377141745bb57373ff79fb1170f895f42bd1f7c1a11`):
+El proyecto cuenta con **76 pruebas automatizadas** en 10 suites ejecutadas contra Docker real (`npm test`), con **100% de éxito**. La evidencia completa está registrada en [docs/pruebas-salida.txt](docs/pruebas-salida.txt) (SHA-256: `e84a3873d2b7ac517b351a6ddab12007c51413e5178940765462ce5410cca75e`):
 
 | Suite de Pruebas | Archivo | Pruebas | Qué verifica |
 | --- | --- | :---: | --- |

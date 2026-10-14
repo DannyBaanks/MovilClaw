@@ -1,0 +1,46 @@
+# Ejecuta las pruebas del nucleo en cada push y en cada PR.
+#
+# El otro workflow (ios-build.yml) compila la app en un runner de macOS, que es caro y
+# lento. Este es el rapido, y es el que deberia bloquear un PR: si el nucleo no pasa,
+# no hay nada que compilar.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Núcleo (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # El proyecto pide Node 20 como minimo; se comprueba tambien en la version actual.
+        node: ['20', '24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # La imagen del sandbox hace falta para las pruebas de aislamiento; si no se
+      # construye, esas pruebas se saltan solas en vez de fallar en falso.
+      - name: Construir la imagen del sandbox
+        run: docker build -q -t movilclaw/sandbox:latest server/
+
+      - name: Ejecutar las pruebas
+        run: npm test
+
+      - name: Comprobar que el servidor arranca
+        run: |
+          PORT=8799 node server/api.mjs &
+          sleep 2
+          curl -sf --max-time 10 http://127.0.0.1:8799/api/health
+          kill %1

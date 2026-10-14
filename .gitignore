@@ -10,3 +10,7 @@ build/
 # Estado local del servidor: sellos y manifiestos. Nunca se commitea.
 # El servidor lo escribe en MOVILCLAW_STATE, o aqui si no se le dice otra cosa.
 sealed/
+
+# Basura de empaquetar una IPA a mano (Payload/<App>.app)
+Payload/
+*.ipa
