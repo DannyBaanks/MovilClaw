@@ -88,11 +88,36 @@ test("it does not run as root, and cannot gain privileges", { skip }, () => {
   });
 });
 
-test("memory is capped: asking for far more than the limit fails", { skip }, () => {
+test("memory is really capped, and the cap is visible from inside", { skip }, () => {
   withSandbox("mc-iso-mem", () => {
-    const r = run(["exec", "mc-iso-mem", "python3", "-c",
-      "b=bytearray(1024*1024*1024);print('allocated')"]);
-    assert.notEqual(r.code, 0, "a 1 GiB allocation must not succeed under a 256m cap");
+    // This test used to assert that `bytearray(1GiB)` failed under a 256m cap. It passed
+    // locally and failed on the CI runner, and the reason is worth keeping: `bytearray`
+    // reserves *virtual* memory, which the kernel does not charge until pages are written.
+    // So the old assertion measured the kernel's overcommit mood, not the sandbox's limit.
+    //
+    // What is actually testable is the limit itself: the container's own cgroup says what
+    // it is allowed to use, and that number is set by the flag the orchestrator passes.
+    const limitFile = "/sys/fs/cgroup/memory.max"; // cgroup v2
+    const legacy = "/sys/fs/cgroup/memory/memory.limit_in_bytes"; // cgroup v1
+    const r = run(["exec", "mc-iso-mem", "sh", "-c",
+      `cat ${limitFile} 2>/dev/null || cat ${legacy} 2>/dev/null || echo sin-limite`]);
+    const value = r.out.trim();
+    assert.notEqual(value, "sin-limite", "el sandbox debe tener un limite de memoria puesto");
+
+    // Either an exact byte count, or the literal "max" when Docker chose the host's default.
+    if (value !== "max") {
+      const bytes = Number(value);
+      assert.ok(Number.isFinite(bytes), `el limite debe ser un numero, y llego: ${value}`);
+      assert.ok(bytes <= 256 * 1024 * 1024,
+        `el limite debe ser de 256m o menos, y es ${Math.round(bytes / 1024 / 1024)}m`);
+    }
+
+    // And writing past the cap must not be survivable: the process is killed by the kernel
+    // (OOM), which is why the old test looked for the wrong kind of failure.
+    const hog = run(["exec", "mc-iso-mem", "python3", "-c",
+      "b=bytearray(1024*1024*1024)\nfor i in range(0,len(b),4096): b[i]=1\nprint('sobrevivio')"]);
+    assert.notEqual(hog.code, 0, "escribir 1 GiB bajo un tope de 256m no debe sobrevivir");
+    assert.doesNotMatch(hog.out, /sobrevivio/);
   });
 });
 
